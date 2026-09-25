@@ -344,7 +344,7 @@ function main(script_path)
   end
 
   local reg = Registry("PDF_Export")
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 680, "PDF Export")
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 710, "PDF Export")
   dialog:AddDoubleField("LineWidth", reg:GetDouble("LineWidth", 0.5))
   dialog:AddDoubleField("Margin", reg:GetDouble("Margin", 10))
   dialog:AddDoubleField("FontSize", reg:GetDouble("FontSize", 3.5))
@@ -354,6 +354,7 @@ function main(script_path)
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
   dialog:AddDoubleField("MinDim", reg:GetDouble("MinDim", 25))
+  dialog:AddRadioGroup("DimColor", reg:GetInt("DimColor", 1))
   dialog:AddCheckBox("ShowScale", reg:GetBool("ShowScale", true))
   dialog:AddTextField("Title", reg:GetString("Title", ""))
   dialog:AddTextField("Note", "")
@@ -369,6 +370,7 @@ function main(script_path)
   local dim_overall = dialog:GetCheckBox("DimOverall")
   local dim_each    = dialog:GetCheckBox("DimEach")
   local min_dim_mm  = dialog:GetDoubleField("MinDim")
+  local dim_color   = dialog:GetRadioIndex("DimColor")   -- 1 schwarz, 2 blau, 3 rot, 4 gruen, 5 grau
   local show_scale  = dialog:GetCheckBox("ShowScale")
   local title       = dialog:GetTextField("Title") or ""
   local note        = dialog:GetTextField("Note") or ""
@@ -381,6 +383,7 @@ function main(script_path)
   reg:SetBool("DimOverall", dim_overall)
   reg:SetBool("DimEach", dim_each)
   reg:SetDouble("MinDim", min_dim_mm)
+  reg:SetInt("DimColor", dim_color)
   reg:SetBool("ShowScale", show_scale)
   reg:SetString("Title", title)
 
@@ -492,7 +495,16 @@ function main(script_path)
 
   -- 2) Bemassung
   local d = Draw.new(fs, 0.25 * MM)
-  d:add("q " .. f(0.25 * MM) .. " w 0 G 0 g")
+  local DIM_COLORS = {
+    { 0, 0, 0 },          -- schwarz
+    { 0, 0.35, 0.8 },     -- blau
+    { 0.85, 0, 0 },       -- rot
+    { 0, 0.55, 0.2 },     -- gruen
+    { 0.45, 0.45, 0.45 }, -- grau
+  }
+  local rgb = DIM_COLORS[dim_color] or DIM_COLORS[1]
+  local col = f(rgb[1]) .. " " .. f(rgb[2]) .. " " .. f(rgb[3])
+  d:add("q " .. f(0.25 * MM) .. " w " .. col .. " RG " .. col .. " rg")
   local near = 5 * MM          -- Abstand Einzelmasse
   local far  = near + 2 * fs + 3 * MM  -- Abstand Gesamtmasse
   if dim_overall then
@@ -522,7 +534,8 @@ function main(script_path)
     end
   end
 
-  -- 3) Titel, Notiz, Massstab
+  -- 3) Titel, Notiz, Massstab (immer schwarz)
+  d:add("0 G 0 g")
   local ytop = page_h - margin
   if title ~= "" then
     ytop = ytop - fs * 1.4
