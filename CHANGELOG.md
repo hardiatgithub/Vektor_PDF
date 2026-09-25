@@ -5,10 +5,26 @@ Neueste Version steht oben.
 
 ## [Unveröffentlicht]
 
+## [1.1.0] – 2026-09-25
+
+### Geändert
+- „Maße jedes geschlossenen Vektors“ bemaßt keine Vektoren mehr, die in einer **Gruppe** liegen
+  (z. B. in Kurven umgewandelter Text). Die Buchstaben werden gezeichnet, aber nicht einzeln bemaßt.
+
+### Neu
+- Einstellung **„Einzelmaße ab … mm“** (Standard 25 mm): kleinere Vektoren, z. B. Buchstaben,
+  bekommen keine Einzelmaße. 0 = alle Vektoren bemaßen.
+- Abschlussmeldung zeigt, wie viele Vektoren in Gruppen liegen.
+
+## [1.0.1] – 2026-09-25
+
 ### Behoben
 - Absturz bei Zeichnungen mit **Bézier-Kurven** („attempt to index local 'c1'“).
-  Die Kontrollpunkte werden jetzt robust ausgelesen; falls das nicht möglich ist,
-  wird die Kurve als Gerade gezeichnet und in der Abschlussmeldung darauf hingewiesen.
+- Ellipsen und andere Bézier-Kurven wurden als Geraden gezeichnet (Ellipse → Raute).
+  Die Kurven werden jetzt korrekt in feinen Schritten nachgezeichnet.
+
+### Neu
+- Diagnose-Hinweis in der Abschlussmeldung, falls eine Kurve trotzdem nicht gelesen werden kann.
 
 ## [1.0.0] – 2026-09-25
 

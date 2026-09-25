@@ -196,10 +196,11 @@ end
 -- ------------------------------------------------------------------
 -- Vektoren einsammeln (inkl. Gruppen)
 -- ------------------------------------------------------------------
-local function AddObject(obj, contours)
+-- in_group: Kontur stammt aus einer Gruppe (z. B. in Kurven umgewandelter Text)
+local function AddObject(obj, contours, in_group)
   local ok, contour = pcall(function() return obj:GetContour() end)
   if ok and contour ~= nil then
-    contours[#contours + 1] = contour
+    contours[#contours + 1] = { contour = contour, in_group = in_group or false }
     return
   end
   local gok, group = pcall(function() return CastCadObjectToCadObjectGroup(obj) end)
@@ -209,7 +210,7 @@ local function AddObject(obj, contours)
       while pos ~= nil do
         local child
         child, pos = group:GetNext(pos)
-        AddObject(child, contours)
+        AddObject(child, contours, true)
       end
     end)
     if iok then return end
@@ -343,7 +344,7 @@ function main(script_path)
   end
 
   local reg = Registry("PDF_Export")
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 640, "PDF Export")
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 680, "PDF Export")
   dialog:AddDoubleField("LineWidth", reg:GetDouble("LineWidth", 0.5))
   dialog:AddDoubleField("Margin", reg:GetDouble("Margin", 10))
   dialog:AddDoubleField("FontSize", reg:GetDouble("FontSize", 3.5))
@@ -352,6 +353,7 @@ function main(script_path)
   dialog:AddCheckBox("DrawBorder", reg:GetBool("DrawBorder", false))
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
+  dialog:AddDoubleField("MinDim", reg:GetDouble("MinDim", 25))
   dialog:AddCheckBox("ShowScale", reg:GetBool("ShowScale", true))
   dialog:AddTextField("Title", reg:GetString("Title", ""))
   dialog:AddTextField("Note", "")
@@ -366,6 +368,7 @@ function main(script_path)
   local draw_border = dialog:GetCheckBox("DrawBorder")
   local dim_overall = dialog:GetCheckBox("DimOverall")
   local dim_each    = dialog:GetCheckBox("DimEach")
+  local min_dim_mm  = dialog:GetDoubleField("MinDim")
   local show_scale  = dialog:GetCheckBox("ShowScale")
   local title       = dialog:GetTextField("Title") or ""
   local note        = dialog:GetTextField("Note") or ""
@@ -377,6 +380,7 @@ function main(script_path)
   reg:SetBool("DrawBorder", draw_border)
   reg:SetBool("DimOverall", dim_overall)
   reg:SetBool("DimEach", dim_each)
+  reg:SetDouble("MinDim", min_dim_mm)
   reg:SetBool("ShowScale", show_scale)
   reg:SetString("Title", title)
 
@@ -412,7 +416,8 @@ function main(script_path)
   local paths = {}
   local minx, miny, maxx, maxy = math.huge, math.huge, -math.huge, -math.huge
   for _, c in ipairs(contours) do
-    local p = ContourToPath(c, seg_len)
+    local p = ContourToPath(c.contour, seg_len)
+    p.in_group = c.in_group
     paths[#paths + 1] = p
     minx = math.min(minx, p.minx); miny = math.min(miny, p.miny)
     maxx = math.max(maxx, p.maxx); maxy = math.max(maxy, p.maxy)
@@ -496,11 +501,14 @@ function main(script_path)
   end
   if dim_each then
     local tol = in_mm and 0.05 or 0.002
+    local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4   -- Eingabe immer in mm
     for _, p in ipairs(paths) do
       local pw, ph = p.maxx - p.minx, p.maxy - p.miny
       local is_total = math.abs(p.minx - vminx) < tol and math.abs(p.maxx - vmaxx) < tol and
                        math.abs(p.miny - vminy) < tol and math.abs(p.maxy - vmaxy) < tol
-      if p.closed and pw > tol and ph > tol and not (is_total and dim_overall) then
+      local big_enough = math.max(pw, ph) >= min_dim
+      if p.closed and not p.in_group and big_enough and pw > tol and ph > tol and
+         not (is_total and dim_overall) then
         if p.all_arcs and math.abs(pw - ph) < 0.01 * pw then
           -- Kreis: Durchmesser ueber dem Kreis
           d:text(tx((p.minx + p.maxx) / 2), ty(p.maxy) + 1.5 * MM, "\195\152 " .. fmt(pw))
@@ -551,6 +559,11 @@ function main(script_path)
 
   local msg = "PDF gespeichert:\n" .. fd.PathName ..
               "\n\n" .. #paths .. " Vektoren, Linienstaerke " .. line_mm .. " mm"
+  local n_group = 0
+  for _, p in ipairs(paths) do if p.in_group then n_group = n_group + 1 end end
+  if dim_each then
+    msg = msg .. "\n(" .. n_group .. " davon in Gruppen - ohne Einzelmasse)"
+  end
   if skipped > 0 then
     msg = msg .. "\n\n" .. skipped .. " Objekt(e) ohne Vektorform (Vectric-Text/-Bemassung)" ..
           " wurden uebersprungen - Masse erzeugt das Gadget selbst."
