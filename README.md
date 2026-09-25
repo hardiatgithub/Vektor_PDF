@@ -10,6 +10,8 @@ Gadget für **Vectric VCarve Pro / Aspire** (ab V12), das Vektoren als **PDF-Zei
 - **Automatische Bemaßung**
   - Gesamtmaße (Breite × Höhe)
   - optional Maße jedes geschlossenen Vektors, Kreise als Durchmesser (Ø)
+  - Einzelmaße erst ab einer Mindestgröße (z. B. keine Maße an Buchstaben)
+  - Farbe der Bemaßung wählbar (Schwarz, Blau, Rot, Grün, Grau)
 - **Titel** und **Notiz** oben auf dem Blatt
 - **Maßstab, Einheit (mm/Zoll) und Datum** in der Fußzeile
 - Seitenformat: **auf A4 einpassen** (Hoch-/Querformat automatisch) oder **Maßstab 1:1**
@@ -22,13 +24,15 @@ Gadget für **Vectric VCarve Pro / Aspire** (ab V12), das Vektoren als **PDF-Zei
    - `Vektor_PDF.lua`
    - `Vektor_PDF.htm`
 
-   in den Gadget-Ordner von Vectric kopieren, z. B.:
+   in den öffentlichen Gadget-Ordner von Vectric kopieren, z. B.:
 
    ```
-   C:\ProgramData\Vectric\VCarve Pro\V12.5\Gadgets\Vektor_PDF\
+   C:\Users\Public\Documents\Vectric Files\Gadgets\VCarve Pro V12.5\Vektor_PDF\
    ```
 
-   (Programmname und Version ggf. anpassen, z. B. `Aspire\V12.5`.)
+   (Programmname und Version ggf. anpassen, z. B. `Aspire V12.5`.)
+   Der Ordner `C:\ProgramData\Vectric\...\Gadgets` ist für die mitgelieferten
+   Vectric-Gadgets gedacht.
 
 2. Vectric neu starten. Das Gadget erscheint im Menü **Gadgets → Vektor_PDF**.
 

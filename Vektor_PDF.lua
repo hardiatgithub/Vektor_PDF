@@ -6,7 +6,7 @@
 
   Installation:
     Ordner "Vektor_PDF" (mit Vektor_PDF.lua und Vektor_PDF.htm) nach
-    C:\ProgramData\Vectric\<Programm>\V12.5\Gadgets\  kopieren
+    C:\Users\Public\Documents\Vectric Files\Gadgets\<Programm> V12.5\  kopieren
 ]]
 
 local atan2 = math.atan2 or math.atan

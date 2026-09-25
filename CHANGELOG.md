@@ -5,6 +5,10 @@ Neueste Version steht oben.
 
 ## [Unveröffentlicht]
 
+### Geändert
+- README: Installation in den öffentlichen Gadget-Ordner
+  (`C:\Users\Public\Documents\Vectric Files\Gadgets\...`), neue Optionen beschrieben.
+
 ## [1.2.0] – 2026-09-26
 
 ### Neu
