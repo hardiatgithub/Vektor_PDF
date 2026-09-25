@@ -1,0 +1,12 @@
+# Sicherungs- und temporäre Dateien
+*.bak
+*.tmp
+*.log
+*~
+
+# Test-Ausgaben
+*.pdf
+
+# Windows
+Thumbs.db
+desktop.ini

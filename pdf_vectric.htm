@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>PDF Export</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 12px; background: #f0f0f0; margin: 12px; }
+  h2 { font-size: 14px; margin: 0 0 10px 0; }
+  fieldset { border: 1px solid #bbb; margin-bottom: 8px; padding: 6px 8px; }
+  legend { font-weight: bold; }
+  td { padding: 2px 4px; }
+  input.num { width: 60px; text-align: right; }
+  input.txt { width: 330px; }
+  .hint { color: #666; font-size: 11px; }
+  .buttons { text-align: right; margin-top: 10px; }
+  .FormButton { width: 80px; margin-left: 6px; }
+</style>
+</head>
+<body>
+<h2>Vektoren als PDF exportieren</h2>
+
+<fieldset>
+  <legend>Linien</legend>
+  <table>
+    <tr><td>Linienstärke:</td><td><input class="num" type="text" id="LineWidth"> mm
+      <span class="hint">&nbsp;0,3 fein · 0,5 normal · 1,0 kräftig</span></td></tr>
+  </table>
+</fieldset>
+
+<fieldset>
+  <legend>Welche Vektoren</legend>
+  <label><input type="radio" name="Source" value="1"> Nur ausgewählte</label>&nbsp;&nbsp;
+  <label><input type="radio" name="Source" value="2"> Alle sichtbaren Ebenen</label>
+</fieldset>
+
+<fieldset>
+  <legend>Bemaßung (wird automatisch erzeugt)</legend>
+  <label><input type="checkbox" id="DimOverall"> Gesamtmaße (Breite × Höhe)</label><br>
+  <label><input type="checkbox" id="DimEach"> Maße jedes geschlossenen Vektors (Kreise als Ø)</label>
+  <table>
+    <tr><td>Schriftgröße:</td><td><input class="num" type="text" id="FontSize"> mm</td></tr>
+  </table>
+</fieldset>
+
+<fieldset>
+  <legend>Beschriftung</legend>
+  <table>
+    <tr><td>Titel:</td><td><input class="txt" type="text" id="Title"></td></tr>
+    <tr><td>Notiz:</td><td><input class="txt" type="text" id="Note"></td></tr>
+  </table>
+  <label><input type="checkbox" id="ShowScale"> Maßstab, Einheit und Datum unten anzeigen</label>
+</fieldset>
+
+<fieldset>
+  <legend>Seite</legend>
+  <label><input type="radio" name="ScaleMode" value="1"> Auf A4 einpassen</label>&nbsp;&nbsp;
+  <label><input type="radio" name="ScaleMode" value="2"> Maßstab 1:1</label>
+  <table>
+    <tr><td>Rand:</td><td><input class="num" type="text" id="Margin"> mm</td></tr>
+  </table>
+  <label><input type="checkbox" id="DrawBorder"> Materialumriss grau mitdrucken</label>
+</fieldset>
+
+<div class="buttons">
+  <input id="ButtonOK" class="FormButton" type="button" value="OK">
+  <input id="ButtonCancel" class="FormButton" type="button" value="Abbrechen">
+</div>
+</body>
+</html>
