@@ -1,12 +1,12 @@
 -- VECTRIC LUA SCRIPT
 --[[
-  pdf_vectric -  exportiert Vektoren als PDF mit einstellbarer Linienstaerke,
+  Vektor_PDF  -  exportiert Vektoren als PDF mit einstellbarer Linienstaerke,
                  automatischer Bemassung und Beschriftung
   Fuer Aspire / VCarve (Gadget-API)
 
   Installation:
-    Ordner "pdf_vectric" (mit pdf_vectric.lua und pdf_vectric.htm) nach
-    C:\ProgramData\Vectric\<Programm>\V12.0\Gadgets\  kopieren
+    Ordner "Vektor_PDF" (mit Vektor_PDF.lua und Vektor_PDF.htm) nach
+    C:\ProgramData\Vectric\<Programm>\V12.5\Gadgets\  kopieren
 ]]
 
 local atan2 = math.atan2 or math.atan
@@ -262,7 +262,7 @@ function main(script_path)
   end
 
   local reg = Registry("PDF_Export")
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\pdf_vectric.htm", 520, 640, "PDF Export")
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 640, "PDF Export")
   dialog:AddDoubleField("LineWidth", reg:GetDouble("LineWidth", 0.5))
   dialog:AddDoubleField("Margin", reg:GetDouble("Margin", 10))
   dialog:AddDoubleField("FontSize", reg:GetDouble("FontSize", 3.5))

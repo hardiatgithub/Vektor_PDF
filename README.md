@@ -1,4 +1,4 @@
-# pdf_vectric
+# Vektor_PDF
 
 Gadget für **Vectric VCarve Pro / Aspire** (ab V12), das Vektoren als **PDF-Zeichnung** exportiert – mit einstellbarer Linienstärke, automatischer Bemaßung, Titel und Maßstabsangabe.
 
@@ -18,26 +18,26 @@ Gadget für **Vectric VCarve Pro / Aspire** (ab V12), das Vektoren als **PDF-Zei
 
 ## Installation
 
-1. Den Ordner `pdf_vectric` mit den Dateien
-   - `pdf_vectric.lua`
-   - `pdf_vectric.htm`
+1. Den Ordner `Vektor_PDF` mit den Dateien
+   - `Vektor_PDF.lua`
+   - `Vektor_PDF.htm`
 
    in den Gadget-Ordner von Vectric kopieren, z. B.:
 
    ```
-   C:\ProgramData\Vectric\VCarve Pro\V12.0\Gadgets\pdf_vectric\
+   C:\ProgramData\Vectric\VCarve Pro\V12.5\Gadgets\Vektor_PDF\
    ```
 
-   (Programmname und Version ggf. anpassen, z. B. `Aspire\V12.0`.)
+   (Programmname und Version ggf. anpassen, z. B. `Aspire\V12.5`.)
 
-2. Vectric neu starten. Das Gadget erscheint im Menü **Gadgets → pdf_vectric**.
+2. Vectric neu starten. Das Gadget erscheint im Menü **Gadgets → Vektor_PDF**.
 
-> Wichtig: Ordnername und Name der `.lua`-Datei müssen gleich sein (`pdf_vectric`).
+> Wichtig: Ordnername und Name der `.lua`-Datei müssen gleich sein (`Vektor_PDF`).
 
 ## Verwendung
 
 1. Job öffnen und – falls gewünscht – Vektoren auswählen.
-2. **Gadgets → pdf_vectric** starten.
+2. **Gadgets → Vektor_PDF** starten.
 3. Linienstärke, Bemaßung, Beschriftung und Seitenformat einstellen.
 4. Mit **OK** bestätigen und Speicherort für die PDF-Datei wählen.
 
