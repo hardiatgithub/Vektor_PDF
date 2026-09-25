@@ -338,7 +338,12 @@ function main(script_path)
 
   local border = nil
   if draw_border then
-    local box = job.MaterialBlock.MaterialBox
+    local mok, mb = pcall(MaterialBlock)
+    if not mok or mb == nil then
+      DisplayMessageBox("Materialumriss konnte nicht gelesen werden.")
+      return false
+    end
+    local box = mb.MaterialBox
     border = { box.MinX, box.MinY, box.MaxX, box.MaxY }
     minx = math.min(minx, box.MinX); miny = math.min(miny, box.MinY)
     maxx = math.max(maxx, box.MaxX); maxy = math.max(maxy, box.MaxY)
