@@ -12,6 +12,7 @@
 local atan2 = math.atan2 or math.atan
 local MM = 72 / 25.4            -- Punkte je mm (PDF-Einheit)
 local skipped = 0
+local bezier_fallback = 0
 
 -- ------------------------------------------------------------------
 -- Text-Hilfen
@@ -57,6 +58,74 @@ local function ArcPoints(x1, y1, x2, y2, bulge, seg_len)
   return pts
 end
 
+-- Kontrollpunkt i (1 oder 2) einer Bezier-Kurve lesen.
+-- Die Vectric-API liefert ihn je nach Version als Eigenschaft oder Methode.
+local function BezierControl(bez, i)
+  local names = { "ControlPoint" .. i, "ControlPoint" .. i .. "2D", "GetControlPoint" .. i }
+  for _, name in ipairs(names) do
+    local ok, v = pcall(function() return bez[name] end)
+    if ok and type(v) == "function" then ok, v = pcall(v, bez) end
+    if ok and v ~= nil then
+      local okxy, x, y = pcall(function() return v.X, v.Y end)
+      if okxy and type(x) == "number" and type(y) == "number" then return { x, y } end
+    end
+  end
+  local ok, v = pcall(function() return bez:ControlPoint(i) end)
+  if ok and v ~= nil then
+    local okxy, x, y = pcall(function() return v.X, v.Y end)
+    if okxy and type(x) == "number" then return { x, y } end
+  end
+  return nil
+end
+
+-- Falls keine Kontrollpunkte lesbar sind: Kurve ueber eine
+-- "Punkt bei Parameter t"-Funktion abtasten (Name je nach API-Version).
+local function BezierSample(span, bez, n)
+  local names = { "PointAtParameter", "GetPointAtParameter", "PointAtParam",
+                  "GetPointAtParam", "PointAt", "GetPointAt", "Evaluate", "PointAtT" }
+  for _, obj in ipairs({ bez, span }) do
+    for _, name in ipairs(names) do
+      local ok, fn = pcall(function() return obj[name] end)
+      if ok and type(fn) == "function" then
+        local okp, pt = pcall(fn, obj, 0.5)
+        local okxy, x = pcall(function() return pt.X end)
+        if okp and okxy and type(x) == "number" then
+          local pts = {}
+          for i = 1, n do
+            local _, q = pcall(fn, obj, i / n)
+            pts[#pts + 1] = { q.X, q.Y }
+          end
+          return pts
+        end
+      end
+    end
+  end
+  return nil
+end
+
+-- Diagnose: welche Eigenschaften/Methoden bietet die Bezier-Kurve an?
+local bezier_info = nil
+local function BezierDiagnose(bez)
+  if bezier_info then return end
+  local parts = {}
+  if type(class_info) == "function" then
+    local ok, ci = pcall(class_info, bez)
+    if ok and ci then
+      parts[#parts + 1] = "Klasse: " .. tostring(ci.name)
+      local m = {}
+      if type(ci.methods) == "table" then for k in pairs(ci.methods) do m[#m + 1] = tostring(k) end end
+      table.sort(m)
+      parts[#parts + 1] = "Methoden: " .. table.concat(m, ", ")
+      local a = {}
+      if type(ci.attributes) == "table" then for _, v in pairs(ci.attributes) do a[#a + 1] = tostring(v) end end
+      table.sort(a)
+      parts[#parts + 1] = "Eigenschaften: " .. table.concat(a, ", ")
+    end
+  end
+  if #parts == 0 then parts[1] = "Typ: " .. tostring(bez) .. " (class_info nicht verfuegbar)" end
+  bezier_info = table.concat(parts, "\n")
+end
+
 -- Kontur -> { cmds = {...}, closed, all_arcs, minx, miny, maxx, maxy }
 local function ContourToPath(contour, seg_len)
   local p = { cmds = {}, all_arcs = true, closed = contour.IsClosed,
@@ -80,8 +149,20 @@ local function ContourToPath(contour, seg_len)
     elseif span.IsBezierType then
       p.all_arcs = false
       local bez = CastSpanToBezierSpan(span)
-      local c1, c2 = bez.ControlPoint1, bez.ControlPoint2
-      cmds[#cmds + 1] = { "c", c1.X, c1.Y, c2.X, c2.Y, p2.X, p2.Y }
+      local c1, c2 = BezierControl(bez, 1), BezierControl(bez, 2)
+      if c1 and c2 then
+        cmds[#cmds + 1] = { "c", c1[1], c1[2], c2[1], c2[2], p2.X, p2.Y }
+      else
+        local pts = BezierSample(span, bez, 32)
+        if pts then
+          for _, q in ipairs(pts) do cmds[#cmds + 1] = { "l", q[1], q[2] } end
+          cmds[#cmds] = { "l", p2.X, p2.Y }
+        else
+          bezier_fallback = bezier_fallback + 1    -- nichts lesbar -> Gerade
+          BezierDiagnose(bez)
+          cmds[#cmds + 1] = { "l", p2.X, p2.Y }
+        end
+      end
     else
       p.all_arcs = false
       cmds[#cmds + 1] = { "l", p2.X, p2.Y }
@@ -321,6 +402,8 @@ function main(script_path)
 
   -- Konturen
   skipped = 0
+  bezier_fallback = 0
+  bezier_info = nil
   local contours = CollectContours(job, selected_only)
   if #contours == 0 then
     DisplayMessageBox("Keine Vektoren gefunden.")
@@ -471,6 +554,11 @@ function main(script_path)
   if skipped > 0 then
     msg = msg .. "\n\n" .. skipped .. " Objekt(e) ohne Vektorform (Vectric-Text/-Bemassung)" ..
           " wurden uebersprungen - Masse erzeugt das Gadget selbst."
+  end
+  if bezier_fallback > 0 then
+    msg = msg .. "\n\nHinweis: " .. bezier_fallback .. " Bezier-Kurve(n) konnten nicht gelesen werden" ..
+          " und wurden als Gerade gezeichnet.\n\n--- Diagnose (bitte Screenshot senden) ---\n" ..
+          tostring(bezier_info)
   end
   DisplayMessageBox(msg)
   return true
