@@ -5,6 +5,12 @@ Neueste Version steht oben.
 
 ## [Unveröffentlicht]
 
+## [1.2.0] – 2026-09-26
+
+### Neu
+- **Farbe der Bemaßung** wählbar: Schwarz, Blau, Rot, Grün oder Grau
+  (Maßlinien, Pfeile und Zahlen; Titel und Fußzeile bleiben schwarz).
+
 ## [1.1.0] – 2026-09-25
 
 ### Geändert
