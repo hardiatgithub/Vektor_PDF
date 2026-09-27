@@ -6,6 +6,7 @@ Neueste Version steht oben.
 ## [Unveröffentlicht]
 
 ### Neu
+- **Versionsnummer** wird im Fenstertitel, oben im Dialog und in der Abschlussmeldung angezeigt.
 - Englische Anleitung für Vectric-Nutzer: **README.md** ist jetzt Englisch (GitHub-Startseite),
   die deutsche Anleitung liegt in **README.de.md**; beide verweisen aufeinander.
 

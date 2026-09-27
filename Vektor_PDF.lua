@@ -9,6 +9,8 @@
     C:\Users\Public\Documents\Vectric Files\Gadgets\<Programm> V12.5\  kopieren
 ]]
 
+local VERSION = "1.3.2"         -- bei jedem Release anpassen (siehe CHANGELOG.md)
+
 local atan2 = math.atan2 or math.atan
 local MM = 72 / 25.4            -- Punkte je mm (PDF-Einheit)
 -- Farbauswahl im Dialog (Index 1..5) -> RGB 0..1
@@ -485,8 +487,9 @@ function main(script_path)
     return false
   end
 
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 850, "PDF Export")
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 850, "Vektor_PDF " .. VERSION)
   dialog:AddRadioGroup("Lang", lang)
+  dialog:AddTextField("Version", "v" .. VERSION)
   dialog:AddDoubleField("LineWidth", reg:GetDouble("LineWidth", 0.5))
   dialog:AddDoubleField("DimLineWidth", reg:GetDouble("DimLineWidth", 0.25))
   dialog:AddDoubleField("ArrowSize", reg:GetDouble("ArrowSize", 2.5))
@@ -762,7 +765,8 @@ function main(script_path)
     return false
   end
 
-  local msg = T("PDF gespeichert:\n", "PDF saved:\n") .. fd.PathName ..
+  local msg = "Vektor_PDF v" .. VERSION .. "\n\n" ..
+              T("PDF gespeichert:\n", "PDF saved:\n") .. fd.PathName ..
               "\n\n" .. #paths .. T(" Vektoren, Linienstaerke ", " vectors, line width ") .. line_mm .. " mm"
   local n_group = 0
   for _, p in ipairs(paths) do if p.in_group then n_group = n_group + 1 end end

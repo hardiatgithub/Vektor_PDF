@@ -16,6 +16,7 @@
   .buttons { text-align: right; margin-top: 10px; }
   .FormButton { width: 80px; margin-left: 6px; }
   input.off { background: #e4e4e4; color: #999; border-color: #ccc; }
+  input.ver { border: 0; background: transparent; color: #888; font-size: 11px; width: 60px; padding: 0; }
 </style>
 </head>
 <body>
@@ -25,6 +26,7 @@
     <label><input type="radio" name="Lang" value="2" onclick="syncAll()"> English</label>
   </span>
   <span class="t" data-en="Export vectors as PDF">Vektoren als PDF exportieren</span>
+  <input class="ver" type="text" id="Version" readonly tabindex="-1">
 </h2>
 
 <fieldset>
