@@ -5,6 +5,10 @@ Neueste Version steht oben.
 
 ## [Unveröffentlicht]
 
+### Neu
+- **Radius-Bemaßung**: Option „Radien an Bögen (R …)“ beschriftet Bögen mit Hinweislinie
+  und Pfeil. Gleiche Radien werden je Vektor nur einmal angegeben; Kreise behalten ihr Ø-Maß.
+
 ### Geändert
 - README: Installation in den öffentlichen Gadget-Ordner
   (`C:\Users\Public\Documents\Vectric Files\Gadgets\...`), neue Optionen beschrieben.

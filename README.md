@@ -12,6 +12,7 @@ Gadget für **Vectric VCarve Pro / Aspire** (ab V12), das Vektoren als **PDF-Zei
   - optional Maße jedes geschlossenen Vektors, Kreise als Durchmesser (Ø)
   - Einzelmaße erst ab einer Mindestgröße (z. B. keine Maße an Buchstaben)
   - Farbe der Bemaßung wählbar (Schwarz, Blau, Rot, Grün, Grau)
+  - optional Radien an Bögen (R …)
 - **Titel** und **Notiz** oben auf dem Blatt
 - **Maßstab, Einheit (mm/Zoll) und Datum** in der Fußzeile
 - Seitenformat: **auf A4 einpassen** (Hoch-/Querformat automatisch) oder **Maßstab 1:1**

@@ -126,9 +126,23 @@ local function BezierDiagnose(bez)
   bezier_info = table.concat(parts, "\n")
 end
 
--- Kontur -> { cmds = {...}, closed, all_arcs, minx, miny, maxx, maxy }
+-- Mittelpunkt, Radius und Punkt in der Bogenmitte (fuer die Radius-Bemassung)
+local function ArcInfo(x1, y1, x2, y2, bulge)
+  local dx, dy = x2 - x1, y2 - y1
+  local c = math.sqrt(dx * dx + dy * dy)
+  if c < 1e-9 or math.abs(bulge) < 1e-9 then return nil end
+  local mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+  local lx, ly = -dy / c, dx / c
+  local off = c * (1 - bulge * bulge) / (4 * bulge)
+  local cx, cy = mx + lx * off, my + ly * off
+  local r = math.sqrt((x1 - cx) ^ 2 + (y1 - cy) ^ 2)
+  local am = atan2(y1 - cy, x1 - cx) + 2 * math.atan(bulge)   -- halber Bogenwinkel
+  return { cx = cx, cy = cy, r = r, px = cx + r * math.cos(am), py = cy + r * math.sin(am) }
+end
+
+-- Kontur -> { cmds = {...}, arcs = {...}, closed, all_arcs, minx, miny, maxx, maxy }
 local function ContourToPath(contour, seg_len)
-  local p = { cmds = {}, all_arcs = true, closed = contour.IsClosed,
+  local p = { cmds = {}, arcs = {}, all_arcs = true, closed = contour.IsClosed,
               minx = math.huge, miny = math.huge, maxx = -math.huge, maxy = -math.huge }
   local cmds = p.cmds
   local first = true
@@ -146,6 +160,8 @@ local function ContourToPath(contour, seg_len)
       for _, q in ipairs(ArcPoints(p1.X, p1.Y, p2.X, p2.Y, arc.Bulge, seg_len)) do
         cmds[#cmds + 1] = { "l", q[1], q[2] }
       end
+      local ai = ArcInfo(p1.X, p1.Y, p2.X, p2.Y, arc.Bulge)
+      if ai then p.arcs[#p.arcs + 1] = ai end
     elseif span.IsBezierType then
       p.all_arcs = false
       local bez = CastSpanToBezierSpan(span)
@@ -270,7 +286,7 @@ end
 function Draw:text(x, y, str, size, rotated, align)
   size = size or self.fs
   local w = TextWidth(str, size)
-  local shift = (align == "left") and 0 or w / 2
+  local shift = (align == "left") and 0 or (align == "right") and w or w / 2
   if rotated then
     self:add("BT /F1 " .. f(size) .. " Tf 0 1 -1 0 " .. f(x) .. " " .. f(y - shift) ..
              " Tm " .. PdfStr(str) .. " Tj ET")
@@ -288,6 +304,21 @@ function Draw:hdim(xa, xb, yref, yline, label)
   self:arrowhead(xa, yline, -1, 0)
   self:arrowhead(xb, yline, 1, 0)
   self:text((xa + xb) / 2, yline + 1 * MM, label)
+end
+-- Radius: Pfeil von aussen auf den Bogen (Punkt px,py), Mittelpunkt cx,cy
+function Draw:radius(cx, cy, px, py, label)
+  local dx, dy = px - cx, py - cy
+  local len = math.sqrt(dx * dx + dy * dy)
+  if len < 1e-6 then return end
+  dx, dy = dx / len, dy / len
+  local ox, oy = px + dx * 6 * MM, py + dy * 6 * MM           -- Ende der Hinweislinie
+  local side = (dx >= 0) and 1 or -1
+  local sx = ox + side * 2 * MM                                -- kurzer waagrechter Absatz
+  self:line(px, py, ox, oy)
+  self:line(ox, oy, sx, oy)
+  self:arrowhead(px, py, -dx, -dy)
+  self:text(sx + side * 0.8 * MM, oy - self.fs * 0.35, label, nil, false,
+            side > 0 and "left" or "right")
 end
 -- senkrechtes Mass: von ya bis yb, Bezugskante xref, Masslinie bei xline (links)
 function Draw:vdim(ya, yb, xref, xline, label)
@@ -344,7 +375,7 @@ function main(script_path)
   end
 
   local reg = Registry("PDF_Export")
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 710, "PDF Export")
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 730, "PDF Export")
   dialog:AddDoubleField("LineWidth", reg:GetDouble("LineWidth", 0.5))
   dialog:AddDoubleField("Margin", reg:GetDouble("Margin", 10))
   dialog:AddDoubleField("FontSize", reg:GetDouble("FontSize", 3.5))
@@ -354,6 +385,7 @@ function main(script_path)
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
   dialog:AddDoubleField("MinDim", reg:GetDouble("MinDim", 25))
+  dialog:AddCheckBox("DimRadius", reg:GetBool("DimRadius", false))
   dialog:AddRadioGroup("DimColor", reg:GetInt("DimColor", 1))
   dialog:AddCheckBox("ShowScale", reg:GetBool("ShowScale", true))
   dialog:AddTextField("Title", reg:GetString("Title", ""))
@@ -370,6 +402,7 @@ function main(script_path)
   local dim_overall = dialog:GetCheckBox("DimOverall")
   local dim_each    = dialog:GetCheckBox("DimEach")
   local min_dim_mm  = dialog:GetDoubleField("MinDim")
+  local dim_radius  = dialog:GetCheckBox("DimRadius")
   local dim_color   = dialog:GetRadioIndex("DimColor")   -- 1 schwarz, 2 blau, 3 rot, 4 gruen, 5 grau
   local show_scale  = dialog:GetCheckBox("ShowScale")
   local title       = dialog:GetTextField("Title") or ""
@@ -383,6 +416,7 @@ function main(script_path)
   reg:SetBool("DimOverall", dim_overall)
   reg:SetBool("DimEach", dim_each)
   reg:SetDouble("MinDim", min_dim_mm)
+  reg:SetBool("DimRadius", dim_radius)
   reg:SetInt("DimColor", dim_color)
   reg:SetBool("ShowScale", show_scale)
   reg:SetString("Title", title)
@@ -529,6 +563,27 @@ function main(script_path)
           local same_h = dim_overall and math.abs(p.miny - vminy) < tol and math.abs(p.maxy - vmaxy) < tol
           if not same_w then d:hdim(tx(p.minx), tx(p.maxx), ty(p.miny), ty(p.miny) - near, fmt(pw)) end
           if not same_h then d:vdim(ty(p.miny), ty(p.maxy), tx(p.minx), tx(p.minx) - near, fmt(ph)) end
+        end
+      end
+    end
+  end
+
+  -- Radien an Boegen (gleiche Radien je Vektor nur einmal)
+  if dim_radius then
+    local tol = in_mm and 0.05 or 0.002
+    local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4
+    for _, p in ipairs(paths) do
+      local pw, ph = p.maxx - p.minx, p.maxy - p.miny
+      local is_circle = p.closed and p.all_arcs and pw > tol and math.abs(pw - ph) < 0.01 * pw
+      if not p.in_group and math.max(pw, ph) >= min_dim and not (is_circle and dim_each) then
+        local done = {}
+        for _, a in ipairs(p.arcs) do
+          local seen = false
+          for _, r in ipairs(done) do if math.abs(r - a.r) < tol then seen = true end end
+          if not seen and a.r > tol then
+            done[#done + 1] = a.r
+            d:radius(tx(a.cx), ty(a.cy), tx(a.px), ty(a.py), "R " .. fmt(a.r))
+          end
         end
       end
     end
