@@ -11,6 +11,19 @@
 
 local atan2 = math.atan2 or math.atan
 local MM = 72 / 25.4            -- Punkte je mm (PDF-Einheit)
+-- Farbauswahl im Dialog (Index 1..5) -> RGB 0..1
+local COLORS = {
+  { 0, 0, 0 },          -- schwarz
+  { 0, 0.35, 0.8 },     -- blau
+  { 0.85, 0, 0 },       -- rot
+  { 0, 0.55, 0.2 },     -- gruen
+  { 0.45, 0.45, 0.45 }, -- grau
+}
+local function ColorOps(index)                -- PDF-Operatoren fuer Strich- und Fuellfarbe
+  local rgb = COLORS[index] or COLORS[1]
+  local col = string.format("%.3f %.3f %.3f", rgb[1], rgb[2], rgb[3])
+  return col .. " RG " .. col .. " rg"
+end
 local skipped = 0
 local bezier_fallback = 0
 
@@ -469,8 +482,11 @@ function main(script_path)
   end
 
   local reg = Registry("PDF_Export")
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 760, "PDF Export")
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 830, "PDF Export")
   dialog:AddDoubleField("LineWidth", reg:GetDouble("LineWidth", 0.5))
+  dialog:AddDoubleField("DimLineWidth", reg:GetDouble("DimLineWidth", 0.25))
+  dialog:AddDoubleField("ArrowSize", reg:GetDouble("ArrowSize", 2.5))
+  dialog:AddRadioGroup("VecColor", reg:GetInt("VecColor", 1))
   dialog:AddDoubleField("Margin", reg:GetDouble("Margin", 10))
   dialog:AddDoubleField("FontSize", reg:GetDouble("FontSize", 3.5))
   dialog:AddRadioGroup("ScaleMode", reg:GetInt("ScaleMode", 1))
@@ -481,6 +497,7 @@ function main(script_path)
   dialog:AddDoubleField("MinDim", reg:GetDouble("MinDim", 25))
   dialog:AddCheckBox("DimRadius", reg:GetBool("DimRadius", false))
   dialog:AddTextField("DimLayer", reg:GetString("DimLayer", "Bemassung"))
+  dialog:AddCheckBox("HideDimLayer", reg:GetBool("HideDimLayer", false))
   dialog:AddRadioGroup("DimColor", reg:GetInt("DimColor", 1))
   dialog:AddCheckBox("ShowScale", reg:GetBool("ShowScale", true))
   dialog:AddTextField("Title", reg:GetString("Title", ""))
@@ -489,6 +506,9 @@ function main(script_path)
   if not dialog:ShowDialog() then return false end
 
   local line_mm     = dialog:GetDoubleField("LineWidth")
+  local dim_line_mm = dialog:GetDoubleField("DimLineWidth")
+  local arrow_mm    = dialog:GetDoubleField("ArrowSize")
+  local vec_color   = dialog:GetRadioIndex("VecColor")
   local margin_mm   = dialog:GetDoubleField("Margin")
   local font_mm     = dialog:GetDoubleField("FontSize")
   local scale_mode  = dialog:GetRadioIndex("ScaleMode")      -- 1 = A4, 2 = 1:1
@@ -499,12 +519,16 @@ function main(script_path)
   local min_dim_mm  = dialog:GetDoubleField("MinDim")
   local dim_radius  = dialog:GetCheckBox("DimRadius")
   local dim_layer   = dialog:GetTextField("DimLayer") or ""
+  local hide_dims   = dialog:GetCheckBox("HideDimLayer")
   local dim_color   = dialog:GetRadioIndex("DimColor")   -- 1 schwarz, 2 blau, 3 rot, 4 gruen, 5 grau
   local show_scale  = dialog:GetCheckBox("ShowScale")
   local title       = dialog:GetTextField("Title") or ""
   local note        = dialog:GetTextField("Note") or ""
 
   reg:SetDouble("LineWidth", line_mm)
+  reg:SetDouble("DimLineWidth", dim_line_mm)
+  reg:SetDouble("ArrowSize", arrow_mm)
+  reg:SetInt("VecColor", vec_color)
   reg:SetDouble("Margin", margin_mm)
   reg:SetDouble("FontSize", font_mm)
   reg:SetInt("ScaleMode", scale_mode)
@@ -514,6 +538,7 @@ function main(script_path)
   reg:SetDouble("MinDim", min_dim_mm)
   reg:SetBool("DimRadius", dim_radius)
   reg:SetString("DimLayer", dim_layer)
+  reg:SetBool("HideDimLayer", hide_dims)
   reg:SetInt("DimColor", dim_color)
   reg:SetBool("ShowScale", show_scale)
   reg:SetString("Title", title)
@@ -543,6 +568,7 @@ function main(script_path)
   bezier_fallback = 0
   bezier_info = nil
   local contours, dim_lines = CollectContours(job, selected_only, dim_layer)
+  if hide_dims then dim_lines = {} end      -- Hilfslinien bleiben trotzdem aus der Zeichnung
   if #contours == 0 then
     DisplayMessageBox("Keine Vektoren gefunden.")
     return false
@@ -607,7 +633,7 @@ function main(script_path)
   local function ty(y) return offy + (y - miny) * scale end
 
   -- 1) Zeichnung
-  local s = { f(line_mm * MM) .. " w 1 J 1 j 0 G 0 g" }
+  local s = { f(line_mm * MM) .. " w 1 J 1 j " .. ColorOps(vec_color) }
   for _, p in ipairs(paths) do
     for _, cmd in ipairs(p.cmds) do
       local k = cmd[1]
@@ -629,17 +655,10 @@ function main(script_path)
   end
 
   -- 2) Bemassung
-  local d = Draw.new(fs, 0.25 * MM)
-  local DIM_COLORS = {
-    { 0, 0, 0 },          -- schwarz
-    { 0, 0.35, 0.8 },     -- blau
-    { 0.85, 0, 0 },       -- rot
-    { 0, 0.55, 0.2 },     -- gruen
-    { 0.45, 0.45, 0.45 }, -- grau
-  }
-  local rgb = DIM_COLORS[dim_color] or DIM_COLORS[1]
-  local col = f(rgb[1]) .. " " .. f(rgb[2]) .. " " .. f(rgb[3])
-  d:add("q " .. f(0.25 * MM) .. " w " .. col .. " RG " .. col .. " rg")
+  if not dim_line_mm or dim_line_mm <= 0 then dim_line_mm = 0.25 end
+  local d = Draw.new(fs, dim_line_mm * MM)
+  if arrow_mm and arrow_mm > 0 then d.arrow = arrow_mm * MM end
+  d:add("q " .. f(dim_line_mm * MM) .. " w " .. ColorOps(dim_color))
   local near = 5 * MM          -- Abstand Einzelmasse
   local far  = near + 2 * fs + 3 * MM  -- Abstand Gesamtmasse
   if dim_overall then

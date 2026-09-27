@@ -6,12 +6,12 @@ Gadget für **Vectric VCarve Pro / Aspire** (ab V12), das Vektoren als **PDF-Zei
 
 - Export von **ausgewählten Vektoren** oder **allen sichtbaren Ebenen** (inkl. Gruppen)
 - Linien, Bögen und Bézierkurven werden als echte Vektoren ins PDF geschrieben
-- **Linienstärke** frei einstellbar (z. B. 0,3 fein · 0,5 normal · 1,0 kräftig)
+- **Linienstärke** und **Farbe** der Vektoren einstellbar (z. B. 0,3 fein · 0,5 normal · 1,0 kräftig)
 - **Automatische Bemaßung**
   - Gesamtmaße (Breite × Höhe)
   - optional Maße jedes geschlossenen Vektors, Kreise als Durchmesser (Ø)
   - Einzelmaße erst ab einer Mindestgröße (z. B. keine Maße an Buchstaben)
-  - Farbe der Bemaßung wählbar (Schwarz, Blau, Rot, Grün, Grau)
+  - Farbe, Linienstärke und Pfeilgröße der Bemaßung wählbar
   - optional Radien an Bögen (R …)
   - **manuelle Maße** über einen eigenen Layer (siehe unten)
 - **Titel** und **Notiz** oben auf dem Blatt
@@ -56,7 +56,8 @@ Für Maße, die das Gadget nicht automatisch erzeugt (z. B. Abstand zwischen zwe
 3. Das Gadget druckt die Linie nicht als Vektor, sondern als **Maß** mit Pfeilen und Länge
    (waagrecht, senkrecht oder schräg – je nach Richtung der Linie).
 
-Tipp: Den Layer ausblenden, wenn die Maße nicht gedruckt werden sollen.
+Sollen die manuellen Maße nicht gedruckt werden, im Dialog neben „Maß-Layer“ **ausblenden**
+ankreuzen (oder den Layer in VCarve ausblenden).
 
 ## Hinweise
 

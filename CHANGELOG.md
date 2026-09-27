@@ -5,11 +5,19 @@ Neueste Version steht oben.
 
 ## [Unveröffentlicht]
 
+## [1.3.0] – 2026-09-27
+
 ### Neu
 - **Radius-Bemaßung**: Option „Radien an Bögen (R …)“ beschriftet Bögen mit Hinweislinie
   und Pfeil. Gleiche Radien werden je Vektor nur einmal angegeben; Kreise behalten ihr Ø-Maß.
 - **Manuelle Maße**: Linien auf dem Layer „Bemassung“ (Name im Dialog einstellbar) werden nicht
   gezeichnet, sondern als Maß mit Pfeilen und Länge gedruckt – waagrecht, senkrecht oder schräg.
+- **Linienstärke der Bemaßung** einstellbar (Standard 0,25 mm), unabhängig von den Vektoren.
+- **Pfeilgröße** der Bemaßung einstellbar (Standard 2,5 mm).
+- **Farbe der Vektoren** wählbar: Schwarz, Blau, Rot, Grün oder Grau.
+- Option **„ausblenden“** beim Maß-Layer: manuelle Maße werden nicht gedruckt,
+  ohne den Layer in VCarve ausblenden zu müssen.
+  Solange angekreuzt, ist das Feld für den Layer-Namen ausgegraut.
 
 ### Geändert
 - README: Installation in den öffentlichen Gadget-Ordner

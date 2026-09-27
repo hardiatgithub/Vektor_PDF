@@ -14,6 +14,7 @@
   .hint { color: #666; font-size: 11px; }
   .buttons { text-align: right; margin-top: 10px; }
   .FormButton { width: 80px; margin-left: 6px; }
+  input.off { background: #e4e4e4; color: #999; border-color: #ccc; }
 </style>
 </head>
 <body>
@@ -24,6 +25,12 @@
   <table>
     <tr><td>Linienstärke:</td><td><input class="num" type="text" id="LineWidth"> mm
       <span class="hint">&nbsp;0,3 fein · 0,5 normal · 1,0 kräftig</span></td></tr>
+    <tr><td>Farbe:</td><td>
+      <label><input type="radio" name="VecColor" value="1"> Schwarz</label>
+      <label><input type="radio" name="VecColor" value="2"> Blau</label>
+      <label><input type="radio" name="VecColor" value="3"> Rot</label>
+      <label><input type="radio" name="VecColor" value="4"> Grün</label>
+      <label><input type="radio" name="VecColor" value="5"> Grau</label></td></tr>
   </table>
 </fieldset>
 
@@ -40,7 +47,8 @@
   <label><input type="checkbox" id="DimRadius"> Radien an Bögen (R …)</label>
   <table>
     <tr><td>Maß-Layer:</td><td><input class="num" style="width:120px" type="text" id="DimLayer">
-      <span class="hint">&nbsp;Linien auf diesem Layer werden als Maß gedruckt</span></td></tr>
+      &nbsp;<label><input type="checkbox" id="HideDimLayer" onclick="syncDimLayer()"> ausblenden</label>
+      <br><span class="hint">Linien auf diesem Layer werden als Maß gedruckt</span></td></tr>
   </table>
   <table>
     <tr><td>Farbe:</td><td>
@@ -51,6 +59,10 @@
       <label><input type="radio" name="DimColor" value="5"> Grau</label></td></tr>
     <tr><td>Einzelmaße ab:</td><td><input class="num" type="text" id="MinDim"> mm
       <span class="hint">&nbsp;kleinere Vektoren (z. B. Buchstaben) ohne Maß · 0 = alle</span></td></tr>
+    <tr><td>Linienstärke:</td><td><input class="num" type="text" id="DimLineWidth"> mm
+      <span class="hint">&nbsp;Maßlinien (Standard 0,25)</span></td></tr>
+    <tr><td>Pfeilgröße:</td><td><input class="num" type="text" id="ArrowSize"> mm
+      <span class="hint">&nbsp;Länge der Pfeilspitzen (Standard 2,5)</span></td></tr>
     <tr><td>Schriftgröße:</td><td><input class="num" type="text" id="FontSize"> mm</td></tr>
   </table>
 </fieldset>
@@ -78,5 +90,18 @@
   <input id="ButtonOK" class="FormButton" type="button" value="OK">
   <input id="ButtonCancel" class="FormButton" type="button" value="Abbrechen">
 </div>
+<script type="text/javascript">
+// Maß-Layer-Feld ausgrauen, solange "ausblenden" angekreuzt ist.
+// readOnly statt disabled, damit VCarve den Wert weiterhin lesen kann.
+function syncDimLayer() {
+  var cb = document.getElementById("HideDimLayer");
+  var tf = document.getElementById("DimLayer");
+  if (!cb || !tf) return;
+  tf.readOnly = cb.checked;
+  tf.className = cb.checked ? "num off" : "num";
+}
+// VCarve setzt die Werte erst nach dem Laden -> Zustand regelmäßig abgleichen
+setInterval(syncDimLayer, 200);
+</script>
 </body>
 </html>
