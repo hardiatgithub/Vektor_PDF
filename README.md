@@ -13,6 +13,7 @@ Gadget für **Vectric VCarve Pro / Aspire** (ab V12), das Vektoren als **PDF-Zei
   - Einzelmaße erst ab einer Mindestgröße (z. B. keine Maße an Buchstaben)
   - Farbe der Bemaßung wählbar (Schwarz, Blau, Rot, Grün, Grau)
   - optional Radien an Bögen (R …)
+  - **manuelle Maße** über einen eigenen Layer (siehe unten)
 - **Titel** und **Notiz** oben auf dem Blatt
 - **Maßstab, Einheit (mm/Zoll) und Datum** in der Fußzeile
 - Seitenformat: **auf A4 einpassen** (Hoch-/Querformat automatisch) oder **Maßstab 1:1**
@@ -45,6 +46,17 @@ Gadget für **Vectric VCarve Pro / Aspire** (ab V12), das Vektoren als **PDF-Zei
 2. **Gadgets → Vektor_PDF** starten.
 3. Linienstärke, Bemaßung, Beschriftung und Seitenformat einstellen.
 4. Mit **OK** bestätigen und Speicherort für die PDF-Datei wählen.
+
+## Manuelle Maße
+
+Für Maße, die das Gadget nicht automatisch erzeugt (z. B. Abstand zwischen zwei Teilen):
+
+1. In VCarve einen Layer **„Bemassung“** anlegen (Name im Dialog unter „Maß-Layer“ änderbar).
+2. Auf diesem Layer eine **Linie** von Punkt zu Punkt zeichnen – am besten mit Fangen an den Kanten.
+3. Das Gadget druckt die Linie nicht als Vektor, sondern als **Maß** mit Pfeilen und Länge
+   (waagrecht, senkrecht oder schräg – je nach Richtung der Linie).
+
+Tipp: Den Layer ausblenden, wenn die Maße nicht gedruckt werden sollen.
 
 ## Hinweise
 

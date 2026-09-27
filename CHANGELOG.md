@@ -8,6 +8,8 @@ Neueste Version steht oben.
 ### Neu
 - **Radius-Bemaßung**: Option „Radien an Bögen (R …)“ beschriftet Bögen mit Hinweislinie
   und Pfeil. Gleiche Radien werden je Vektor nur einmal angegeben; Kreise behalten ihr Ø-Maß.
+- **Manuelle Maße**: Linien auf dem Layer „Bemassung“ (Name im Dialog einstellbar) werden nicht
+  gezeichnet, sondern als Maß mit Pfeilen und Länge gedruckt – waagrecht, senkrecht oder schräg.
 
 ### Geändert
 - README: Installation in den öffentlichen Gadget-Ordner

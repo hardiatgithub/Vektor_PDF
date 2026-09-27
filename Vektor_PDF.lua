@@ -234,8 +234,65 @@ local function AddObject(obj, contours, in_group)
   skipped = skipped + 1
 end
 
-local function CollectContours(job, selected_only)
-  local contours = {}
+local function NormName(s)
+  s = tostring(s or ""):lower():gsub("\195\159", "ss")
+  return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function LayerName(layer)
+  local ok, n = pcall(function() return layer.Name end)
+  if ok and type(n) == "string" then return n end
+  return ""
+end
+
+-- Anfangs- und Endpunkt einer Kontur (ueber die Spans, wie beim Zeichnen)
+local function ContourEnds(contour)
+  local ok, a, b = pcall(function()
+    local pos = contour:GetHeadPosition()
+    local first, last
+    while pos ~= nil do
+      local span
+      span, pos = contour:GetNext(pos)
+      if not first then first = span.StartPoint2D end
+      last = span.EndPoint2D
+    end
+    return first, last
+  end)
+  if ok and a and b then return a.X, a.Y, b.X, b.Y end
+  return nil
+end
+
+-- Hilfslinien auf dem Bemassungs-Layer -> { {x1,y1,x2,y2}, ... }
+local function ContoursToDimLines(list)
+  local lines = {}
+  for _, c in ipairs(list) do
+    local x1, y1, x2, y2 = ContourEnds(c.contour)
+    if x1 and not c.contour.IsClosed then
+      lines[#lines + 1] = { x1, y1, x2, y2 }
+    end
+  end
+  return lines
+end
+
+local function CollectContours(job, selected_only, dim_layer)
+  local contours, dim_list = {}, {}
+  local dim_name = NormName(dim_layer)
+  local lm = job.LayerManager
+  local lpos = lm:GetHeadPosition()
+  while lpos ~= nil do
+    local layer
+    layer, lpos = lm:GetNext(lpos)
+    local is_dim = dim_name ~= "" and NormName(LayerName(layer)) == dim_name
+    if layer.Visible and (is_dim or not selected_only) then
+      local pos = layer:GetHeadPosition()
+      while pos ~= nil do
+        local obj
+        obj, pos = layer:GetNext(pos)
+        AddObject(obj, is_dim and dim_list or contours)
+      end
+    end
+  end
+  local dim_lines = ContoursToDimLines(dim_list)
   if selected_only then
     local sel = job.Selection
     local pos = sel:GetHeadPosition()
@@ -244,23 +301,23 @@ local function CollectContours(job, selected_only)
       obj, pos = sel:GetNext(pos)
       AddObject(obj, contours)
     end
-  else
-    local lm = job.LayerManager
-    local lpos = lm:GetHeadPosition()
-    while lpos ~= nil do
-      local layer
-      layer, lpos = lm:GetNext(lpos)
-      if layer.Visible then
-        local pos = layer:GetHeadPosition()
-        while pos ~= nil do
-          local obj
-          obj, pos = layer:GetNext(pos)
-          AddObject(obj, contours)
+    -- mit ausgewaehlte Hilfslinien nicht als Zeichnung ausgeben
+    local keep = {}
+    for _, c in ipairs(contours) do
+      local x1, y1, x2, y2 = ContourEnds(c.contour)
+      local dup = false
+      if x1 and not c.contour.IsClosed then
+        for _, l in ipairs(dim_lines) do
+          if math.abs(x1 - l[1]) + math.abs(y1 - l[2]) + math.abs(x2 - l[3]) + math.abs(y2 - l[4]) < 1e-6 then
+            dup = true
+          end
         end
       end
+      if not dup then keep[#keep + 1] = c end
     end
+    contours = keep
   end
-  return contours
+  return contours, dim_lines
 end
 
 -- ------------------------------------------------------------------
@@ -304,6 +361,43 @@ function Draw:hdim(xa, xb, yref, yline, label)
   self:arrowhead(xa, yline, -1, 0)
   self:arrowhead(xb, yline, 1, 0)
   self:text((xa + xb) / 2, yline + 1 * MM, label)
+end
+-- Text entlang einer Richtung (Winkel in Bogenmass), mittig bei x,y
+function Draw:textAngle(x, y, str, ang)
+  local size = self.fs
+  local w = TextWidth(str, size)
+  local c, s = math.cos(ang), math.sin(ang)
+  local x0, y0 = x - c * w / 2, y - s * w / 2
+  self:add("BT /F1 " .. f(size) .. " Tf " .. f(c) .. " " .. f(s) .. " " .. f(-s) .. " " .. f(c) ..
+           " " .. f(x0) .. " " .. f(y0) .. " Tm " .. PdfStr(str) .. " Tj ET")
+end
+-- Manuelles Mass von Punkt 1 nach Punkt 2 (Masslinie liegt auf der Hilfslinie)
+function Draw:alignedDim(x1, y1, x2, y2, label)
+  local dx, dy = x2 - x1, y2 - y1
+  local len = math.sqrt(dx * dx + dy * dy)
+  if len < 1e-6 then return end
+  local ux, uy = dx / len, dy / len
+  local nx, ny = -uy, ux                        -- Normale (links der Linie)
+  local tick = 1.5 * MM
+  self:line(x1 - nx * tick, y1 - ny * tick, x1 + nx * tick, y1 + ny * tick)
+  self:line(x2 - nx * tick, y2 - ny * tick, x2 + nx * tick, y2 + ny * tick)
+  if len > 2.5 * self.arrow then
+    self:line(x1, y1, x2, y2)
+    self:arrowhead(x1, y1, -ux, -uy)
+    self:arrowhead(x2, y2, ux, uy)
+  else                                          -- zu kurz: Pfeile von aussen
+    local e = self.arrow + 2 * MM
+    self:line(x1 - ux * e, y1 - uy * e, x2 + ux * e, y2 + uy * e)
+    self:arrowhead(x1, y1, ux, uy)
+    self:arrowhead(x2, y2, -ux, -uy)
+  end
+  local ang = atan2(uy, ux)
+  if ang > math.pi / 2 + 1e-6 or ang <= -math.pi / 2 + 1e-6 then   -- Text lesbar halten
+    ang = ang + math.pi
+  end
+  local tnx, tny = -math.sin(ang), math.cos(ang)   -- "oberhalb" des Textes
+  local mx, my = (x1 + x2) / 2 + tnx * 1 * MM, (y1 + y2) / 2 + tny * 1 * MM
+  self:textAngle(mx, my, label, ang)
 end
 -- Radius: Pfeil von aussen auf den Bogen (Punkt px,py), Mittelpunkt cx,cy
 function Draw:radius(cx, cy, px, py, label)
@@ -375,7 +469,7 @@ function main(script_path)
   end
 
   local reg = Registry("PDF_Export")
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 730, "PDF Export")
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 760, "PDF Export")
   dialog:AddDoubleField("LineWidth", reg:GetDouble("LineWidth", 0.5))
   dialog:AddDoubleField("Margin", reg:GetDouble("Margin", 10))
   dialog:AddDoubleField("FontSize", reg:GetDouble("FontSize", 3.5))
@@ -386,6 +480,7 @@ function main(script_path)
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
   dialog:AddDoubleField("MinDim", reg:GetDouble("MinDim", 25))
   dialog:AddCheckBox("DimRadius", reg:GetBool("DimRadius", false))
+  dialog:AddTextField("DimLayer", reg:GetString("DimLayer", "Bemassung"))
   dialog:AddRadioGroup("DimColor", reg:GetInt("DimColor", 1))
   dialog:AddCheckBox("ShowScale", reg:GetBool("ShowScale", true))
   dialog:AddTextField("Title", reg:GetString("Title", ""))
@@ -403,6 +498,7 @@ function main(script_path)
   local dim_each    = dialog:GetCheckBox("DimEach")
   local min_dim_mm  = dialog:GetDoubleField("MinDim")
   local dim_radius  = dialog:GetCheckBox("DimRadius")
+  local dim_layer   = dialog:GetTextField("DimLayer") or ""
   local dim_color   = dialog:GetRadioIndex("DimColor")   -- 1 schwarz, 2 blau, 3 rot, 4 gruen, 5 grau
   local show_scale  = dialog:GetCheckBox("ShowScale")
   local title       = dialog:GetTextField("Title") or ""
@@ -417,6 +513,7 @@ function main(script_path)
   reg:SetBool("DimEach", dim_each)
   reg:SetDouble("MinDim", min_dim_mm)
   reg:SetBool("DimRadius", dim_radius)
+  reg:SetString("DimLayer", dim_layer)
   reg:SetInt("DimColor", dim_color)
   reg:SetBool("ShowScale", show_scale)
   reg:SetString("Title", title)
@@ -445,7 +542,7 @@ function main(script_path)
   skipped = 0
   bezier_fallback = 0
   bezier_info = nil
-  local contours = CollectContours(job, selected_only)
+  local contours, dim_lines = CollectContours(job, selected_only, dim_layer)
   if #contours == 0 then
     DisplayMessageBox("Keine Vektoren gefunden.")
     return false
@@ -460,6 +557,10 @@ function main(script_path)
     maxx = math.max(maxx, p.maxx); maxy = math.max(maxy, p.maxy)
   end
   local vminx, vminy, vmaxx, vmaxy = minx, miny, maxx, maxy   -- nur Vektoren
+  for _, l in ipairs(dim_lines) do                              -- Platz fuer manuelle Masse
+    minx = math.min(minx, l[1], l[3]); miny = math.min(miny, l[2], l[4])
+    maxx = math.max(maxx, l[1], l[3]); maxy = math.max(maxy, l[2], l[4])
+  end
 
   local border = nil
   if draw_border then
@@ -589,6 +690,12 @@ function main(script_path)
     end
   end
 
+  -- Manuelle Masse aus den Hilfslinien des Bemassungs-Layers
+  for _, l in ipairs(dim_lines) do
+    local len = math.sqrt((l[3] - l[1]) ^ 2 + (l[4] - l[2]) ^ 2)
+    d:alignedDim(tx(l[1]), ty(l[2]), tx(l[3]), ty(l[4]), fmt(len))
+  end
+
   -- 3) Titel, Notiz, Massstab (immer schwarz)
   d:add("0 G 0 g")
   local ytop = page_h - margin
@@ -629,6 +736,9 @@ function main(script_path)
               "\n\n" .. #paths .. " Vektoren, Linienstaerke " .. line_mm .. " mm"
   local n_group = 0
   for _, p in ipairs(paths) do if p.in_group then n_group = n_group + 1 end end
+  if #dim_lines > 0 then
+    msg = msg .. "\n" .. #dim_lines .. " manuelle(s) Mass(e) vom Layer \"" .. dim_layer .. "\""
+  end
   if dim_each then
     msg = msg .. "\n(" .. n_group .. " davon in Gruppen - ohne Einzelmasse)"
   end
