@@ -5,6 +5,10 @@ Neueste Version steht oben.
 
 ## [Unveröffentlicht]
 
+### Neu
+- Englische Anleitung für Vectric-Nutzer: **README.md** ist jetzt Englisch (GitHub-Startseite),
+  die deutsche Anleitung liegt in **README.de.md**; beide verweisen aufeinander.
+
 ## [1.3.1] – 2026-09-27
 
 ### Neu
