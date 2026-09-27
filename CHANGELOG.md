@@ -5,6 +5,13 @@ Neueste Version steht oben.
 
 ## [Unveröffentlicht]
 
+## [1.3.1] – 2026-09-27
+
+### Neu
+- **Sprache Deutsch / English** oben rechts im Dialog umschaltbar. Die Beschriftung des Dialogs
+  wechselt sofort; Meldungen, Fußzeile (Maßstab/Scale, Datum) und Dezimaltrennzeichen im PDF
+  folgen der Auswahl. Die Einstellung wird gespeichert.
+
 ## [1.3.0] – 2026-09-27
 
 ### Neu

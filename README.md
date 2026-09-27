@@ -18,6 +18,7 @@ Gadget für **Vectric VCarve Pro / Aspire** (ab V12), das Vektoren als **PDF-Zei
 - **Maßstab, Einheit (mm/Zoll) und Datum** in der Fußzeile
 - Seitenformat: **auf A4 einpassen** (Hoch-/Querformat automatisch) oder **Maßstab 1:1**
 - Materialumriss optional grau mitdrucken
+- Dialog, Meldungen und PDF-Fußzeile wahlweise auf **Deutsch oder Englisch**
 - Einstellungen werden zwischen den Aufrufen gespeichert
 
 ## Installation

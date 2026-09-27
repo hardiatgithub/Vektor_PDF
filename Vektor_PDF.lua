@@ -475,14 +475,18 @@ end
 -- Hauptprogramm
 -- ------------------------------------------------------------------
 function main(script_path)
+  local reg = Registry("PDF_Export")
+  local lang = reg:GetInt("Lang", 1)                 -- 1 = Deutsch, 2 = English
+  local function T(de, en) return (lang == 2) and en or de end
+
   local job = VectricJob()
   if not job.Exists then
-    DisplayMessageBox("Kein Job geoeffnet.")
+    DisplayMessageBox(T("Kein Job geoeffnet.", "No job open."))
     return false
   end
 
-  local reg = Registry("PDF_Export")
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 830, "PDF Export")
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 850, "PDF Export")
+  dialog:AddRadioGroup("Lang", lang)
   dialog:AddDoubleField("LineWidth", reg:GetDouble("LineWidth", 0.5))
   dialog:AddDoubleField("DimLineWidth", reg:GetDouble("DimLineWidth", 0.25))
   dialog:AddDoubleField("ArrowSize", reg:GetDouble("ArrowSize", 2.5))
@@ -505,6 +509,8 @@ function main(script_path)
 
   if not dialog:ShowDialog() then return false end
 
+  lang = dialog:GetRadioIndex("Lang")
+  reg:SetInt("Lang", lang)
   local line_mm     = dialog:GetDoubleField("LineWidth")
   local dim_line_mm = dialog:GetDoubleField("DimLineWidth")
   local arrow_mm    = dialog:GetDoubleField("ArrowSize")
@@ -544,11 +550,12 @@ function main(script_path)
   reg:SetString("Title", title)
 
   if line_mm <= 0 or font_mm <= 0 then
-    DisplayMessageBox("Linienstaerke und Schriftgroesse muessen groesser als 0 sein.")
+    DisplayMessageBox(T("Linienstaerke und Schriftgroesse muessen groesser als 0 sein.",
+                        "Line width and font size must be greater than 0."))
     return false
   end
   if selected_only and job.Selection.IsEmpty then
-    DisplayMessageBox("Es sind keine Vektoren ausgewaehlt.")
+    DisplayMessageBox(T("Es sind keine Vektoren ausgewaehlt.", "No vectors are selected."))
     return false
   end
 
@@ -558,7 +565,8 @@ function main(script_path)
   local function fmt(v)
     if in_mm then
       local s = string.format("%.1f", v):gsub("%.0$", "")
-      return s:gsub("%.", ",")
+      if lang == 2 then return s end                 -- English: Dezimalpunkt
+      return (s:gsub("%.", ","))
     end
     return string.format('%.3f"', v)
   end
@@ -570,7 +578,7 @@ function main(script_path)
   local contours, dim_lines = CollectContours(job, selected_only, dim_layer)
   if hide_dims then dim_lines = {} end      -- Hilfslinien bleiben trotzdem aus der Zeichnung
   if #contours == 0 then
-    DisplayMessageBox("Keine Vektoren gefunden.")
+    DisplayMessageBox(T("Keine Vektoren gefunden.", "No vectors found."))
     return false
   end
   local paths = {}
@@ -592,7 +600,7 @@ function main(script_path)
   if draw_border then
     local mok, mb = pcall(MaterialBlock)
     if not mok or mb == nil then
-      DisplayMessageBox("Materialumriss konnte nicht gelesen werden.")
+      DisplayMessageBox(T("Materialumriss konnte nicht gelesen werden.", "Could not read the material outline."))
       return false
     end
     local box = mb.MaterialBox
@@ -732,9 +740,12 @@ function main(script_path)
     if math.abs(ratio - 1) < 0.005 then r = "1:1"
     elseif ratio > 1 then r = "1:" .. string.format("%.2f", ratio):gsub("%.?0+$", "")
     else r = string.format("%.2f", 1 / ratio):gsub("%.?0+$", "") .. ":1" end
-    local unit = in_mm and "mm" or "Zoll"
-    d:text(margin, margin, "Ma\195\159stab " .. r .. "   \194\183   Ma\195\159e in " .. unit ..
-           "   \194\183   " .. os.date("%d.%m.%Y"), fs * 0.8, false, "left")
+    local unit = in_mm and "mm" or T("Zoll", "inch")
+    local sep = "   \194\183   "
+    local foot = T("Ma\195\159stab ", "Scale ") .. r .. sep ..
+                 T("Ma\195\159e in ", "Dimensions in ") .. unit .. sep ..
+                 os.date(T("%d.%m.%Y", "%Y-%m-%d"))
+    d:text(margin, margin, foot, fs * 0.8, false, "left")
   end
   d:add("Q")
 
@@ -742,32 +753,37 @@ function main(script_path)
 
   -- Speichern
   local fd = FileDialog()
-  if not fd:FileSave("pdf", "Zeichnung.pdf", "PDF Dateien (*.pdf)|*.pdf|") then
+  if not fd:FileSave("pdf", T("Zeichnung.pdf", "Drawing.pdf"), T("PDF Dateien", "PDF files") .. " (*.pdf)|*.pdf|") then
     return false
   end
   local ok, err = WritePdf(fd.PathName, page_w, page_h, stream)
   if not ok then
-    DisplayMessageBox("PDF konnte nicht geschrieben werden:\n" .. tostring(err))
+    DisplayMessageBox(T("PDF konnte nicht geschrieben werden:\n", "Could not write PDF:\n") .. tostring(err))
     return false
   end
 
-  local msg = "PDF gespeichert:\n" .. fd.PathName ..
-              "\n\n" .. #paths .. " Vektoren, Linienstaerke " .. line_mm .. " mm"
+  local msg = T("PDF gespeichert:\n", "PDF saved:\n") .. fd.PathName ..
+              "\n\n" .. #paths .. T(" Vektoren, Linienstaerke ", " vectors, line width ") .. line_mm .. " mm"
   local n_group = 0
   for _, p in ipairs(paths) do if p.in_group then n_group = n_group + 1 end end
   if #dim_lines > 0 then
-    msg = msg .. "\n" .. #dim_lines .. " manuelle(s) Mass(e) vom Layer \"" .. dim_layer .. "\""
+    msg = msg .. "\n" .. #dim_lines .. T(" manuelle(s) Mass(e) vom Layer \"", " manual dimension(s) from layer \"") .. dim_layer .. "\""
   end
   if dim_each then
-    msg = msg .. "\n(" .. n_group .. " davon in Gruppen - ohne Einzelmasse)"
+    msg = msg .. "\n(" .. n_group .. T(" davon in Gruppen - ohne Einzelmasse)", " of them in groups - no individual dimensions)")
   end
   if skipped > 0 then
-    msg = msg .. "\n\n" .. skipped .. " Objekt(e) ohne Vektorform (Vectric-Text/-Bemassung)" ..
-          " wurden uebersprungen - Masse erzeugt das Gadget selbst."
+    msg = msg .. "\n\n" .. skipped .. T(" Objekt(e) ohne Vektorform (Vectric-Text/-Bemassung)" ..
+          " wurden uebersprungen - Masse erzeugt das Gadget selbst.",
+          " object(s) without vector shape (Vectric text/dimensions)" ..
+          " were skipped - the gadget creates its own dimensions.")
   end
   if bezier_fallback > 0 then
-    msg = msg .. "\n\nHinweis: " .. bezier_fallback .. " Bezier-Kurve(n) konnten nicht gelesen werden" ..
-          " und wurden als Gerade gezeichnet.\n\n--- Diagnose (bitte Screenshot senden) ---\n" ..
+    msg = msg .. T("\n\nHinweis: ", "\n\nNote: ") .. bezier_fallback ..
+          T(" Bezier-Kurve(n) konnten nicht gelesen werden und wurden als Gerade gezeichnet." ..
+            "\n\n--- Diagnose (bitte Screenshot senden) ---\n",
+            " Bezier curve(s) could not be read and were drawn as straight lines." ..
+            "\n\n--- Diagnostics (please send a screenshot) ---\n") ..
           tostring(bezier_info)
   end
   DisplayMessageBox(msg)

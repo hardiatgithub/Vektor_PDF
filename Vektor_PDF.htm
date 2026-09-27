@@ -6,6 +6,7 @@
 <style>
   body { font-family: Arial, sans-serif; font-size: 12px; background: #f0f0f0; margin: 12px; }
   h2 { font-size: 14px; margin: 0 0 10px 0; }
+  .lang { float: right; font-size: 11px; font-weight: normal; }
   fieldset { border: 1px solid #bbb; margin-bottom: 8px; padding: 6px 8px; }
   legend { font-weight: bold; }
   td { padding: 2px 4px; }
@@ -18,79 +19,120 @@
 </style>
 </head>
 <body>
-<h2>Vektoren als PDF exportieren</h2>
+<h2>
+  <span class="lang">
+    <label><input type="radio" name="Lang" value="1" onclick="syncAll()"> Deutsch</label>
+    <label><input type="radio" name="Lang" value="2" onclick="syncAll()"> English</label>
+  </span>
+  <span class="t" data-en="Export vectors as PDF">Vektoren als PDF exportieren</span>
+</h2>
 
 <fieldset>
-  <legend>Linien</legend>
+  <legend><span class="t" data-en="Lines">Linien</span></legend>
   <table>
-    <tr><td>Linienstärke:</td><td><input class="num" type="text" id="LineWidth"> mm
-      <span class="hint">&nbsp;0,3 fein · 0,5 normal · 1,0 kräftig</span></td></tr>
-    <tr><td>Farbe:</td><td>
-      <label><input type="radio" name="VecColor" value="1"> Schwarz</label>
-      <label><input type="radio" name="VecColor" value="2"> Blau</label>
-      <label><input type="radio" name="VecColor" value="3"> Rot</label>
-      <label><input type="radio" name="VecColor" value="4"> Grün</label>
-      <label><input type="radio" name="VecColor" value="5"> Grau</label></td></tr>
+    <tr><td><span class="t" data-en="Line width:">Linienstärke:</span></td>
+      <td><input class="num" type="text" id="LineWidth"> mm
+      <span class="hint t" data-en="&nbsp;0.3 fine · 0.5 normal · 1.0 bold">&nbsp;0,3 fein · 0,5 normal · 1,0 kräftig</span></td></tr>
+    <tr><td><span class="t" data-en="Colour:">Farbe:</span></td><td>
+      <label><input type="radio" name="VecColor" value="1"> <span class="t" data-en="Black">Schwarz</span></label>
+      <label><input type="radio" name="VecColor" value="2"> <span class="t" data-en="Blue">Blau</span></label>
+      <label><input type="radio" name="VecColor" value="3"> <span class="t" data-en="Red">Rot</span></label>
+      <label><input type="radio" name="VecColor" value="4"> <span class="t" data-en="Green">Grün</span></label>
+      <label><input type="radio" name="VecColor" value="5"> <span class="t" data-en="Grey">Grau</span></label></td></tr>
   </table>
 </fieldset>
 
 <fieldset>
-  <legend>Welche Vektoren</legend>
-  <label><input type="radio" name="Source" value="1"> Nur ausgewählte</label>&nbsp;&nbsp;
-  <label><input type="radio" name="Source" value="2"> Alle sichtbaren Ebenen</label>
+  <legend><span class="t" data-en="Which vectors">Welche Vektoren</span></legend>
+  <label><input type="radio" name="Source" value="1"> <span class="t" data-en="Selected only">Nur ausgewählte</span></label>&nbsp;&nbsp;
+  <label><input type="radio" name="Source" value="2"> <span class="t" data-en="All visible layers">Alle sichtbaren Ebenen</span></label>
 </fieldset>
 
 <fieldset>
-  <legend>Bemaßung (wird automatisch erzeugt)</legend>
-  <label><input type="checkbox" id="DimOverall"> Gesamtmaße (Breite × Höhe)</label><br>
-  <label><input type="checkbox" id="DimEach"> Maße jedes geschlossenen Vektors (Kreise als Ø)</label><br>
-  <label><input type="checkbox" id="DimRadius"> Radien an Bögen (R …)</label>
+  <legend><span class="t" data-en="Dimensions (created automatically)">Bemaßung (wird automatisch erzeugt)</span></legend>
+  <label><input type="checkbox" id="DimOverall"> <span class="t" data-en="Overall dimensions (width × height)">Gesamtmaße (Breite × Höhe)</span></label><br>
+  <label><input type="checkbox" id="DimEach"> <span class="t" data-en="Dimensions of each closed vector (circles as Ø)">Maße jedes geschlossenen Vektors (Kreise als Ø)</span></label><br>
+  <label><input type="checkbox" id="DimRadius"> <span class="t" data-en="Radii on arcs (R …)">Radien an Bögen (R …)</span></label>
   <table>
-    <tr><td>Maß-Layer:</td><td><input class="num" style="width:120px" type="text" id="DimLayer">
-      &nbsp;<label><input type="checkbox" id="HideDimLayer" onclick="syncDimLayer()"> ausblenden</label>
-      <br><span class="hint">Linien auf diesem Layer werden als Maß gedruckt</span></td></tr>
+    <tr><td><span class="t" data-en="Dim. layer:">Maß-Layer:</span></td>
+      <td><input class="num" style="width:120px" type="text" id="DimLayer">
+      &nbsp;<label><input type="checkbox" id="HideDimLayer" onclick="syncAll()"> <span class="t" data-en="hide">ausblenden</span></label>
+      <br><span class="hint t" data-en="Lines on this layer are printed as dimensions">Linien auf diesem Layer werden als Maß gedruckt</span></td></tr>
   </table>
   <table>
-    <tr><td>Farbe:</td><td>
-      <label><input type="radio" name="DimColor" value="1"> Schwarz</label>
-      <label><input type="radio" name="DimColor" value="2"> Blau</label>
-      <label><input type="radio" name="DimColor" value="3"> Rot</label>
-      <label><input type="radio" name="DimColor" value="4"> Grün</label>
-      <label><input type="radio" name="DimColor" value="5"> Grau</label></td></tr>
-    <tr><td>Einzelmaße ab:</td><td><input class="num" type="text" id="MinDim"> mm
-      <span class="hint">&nbsp;kleinere Vektoren (z. B. Buchstaben) ohne Maß · 0 = alle</span></td></tr>
-    <tr><td>Linienstärke:</td><td><input class="num" type="text" id="DimLineWidth"> mm
-      <span class="hint">&nbsp;Maßlinien (Standard 0,25)</span></td></tr>
-    <tr><td>Pfeilgröße:</td><td><input class="num" type="text" id="ArrowSize"> mm
-      <span class="hint">&nbsp;Länge der Pfeilspitzen (Standard 2,5)</span></td></tr>
-    <tr><td>Schriftgröße:</td><td><input class="num" type="text" id="FontSize"> mm</td></tr>
+    <tr><td><span class="t" data-en="Colour:">Farbe:</span></td><td>
+      <label><input type="radio" name="DimColor" value="1"> <span class="t" data-en="Black">Schwarz</span></label>
+      <label><input type="radio" name="DimColor" value="2"> <span class="t" data-en="Blue">Blau</span></label>
+      <label><input type="radio" name="DimColor" value="3"> <span class="t" data-en="Red">Rot</span></label>
+      <label><input type="radio" name="DimColor" value="4"> <span class="t" data-en="Green">Grün</span></label>
+      <label><input type="radio" name="DimColor" value="5"> <span class="t" data-en="Grey">Grau</span></label></td></tr>
+    <tr><td><span class="t" data-en="Min. size:">Einzelmaße ab:</span></td>
+      <td><input class="num" type="text" id="MinDim"> mm
+      <span class="hint t" data-en="&nbsp;smaller vectors (e.g. letters) get no dimension · 0 = all">&nbsp;kleinere Vektoren (z. B. Buchstaben) ohne Maß · 0 = alle</span></td></tr>
+    <tr><td><span class="t" data-en="Line width:">Linienstärke:</span></td>
+      <td><input class="num" type="text" id="DimLineWidth"> mm
+      <span class="hint t" data-en="&nbsp;dimension lines (default 0.25)">&nbsp;Maßlinien (Standard 0,25)</span></td></tr>
+    <tr><td><span class="t" data-en="Arrow size:">Pfeilgröße:</span></td>
+      <td><input class="num" type="text" id="ArrowSize"> mm
+      <span class="hint t" data-en="&nbsp;length of arrow heads (default 2.5)">&nbsp;Länge der Pfeilspitzen (Standard 2,5)</span></td></tr>
+    <tr><td><span class="t" data-en="Font size:">Schriftgröße:</span></td>
+      <td><input class="num" type="text" id="FontSize"> mm</td></tr>
   </table>
 </fieldset>
 
 <fieldset>
-  <legend>Beschriftung</legend>
+  <legend><span class="t" data-en="Labels">Beschriftung</span></legend>
   <table>
-    <tr><td>Titel:</td><td><input class="txt" type="text" id="Title"></td></tr>
-    <tr><td>Notiz:</td><td><input class="txt" type="text" id="Note"></td></tr>
+    <tr><td><span class="t" data-en="Title:">Titel:</span></td><td><input class="txt" type="text" id="Title"></td></tr>
+    <tr><td><span class="t" data-en="Note:">Notiz:</span></td><td><input class="txt" type="text" id="Note"></td></tr>
   </table>
-  <label><input type="checkbox" id="ShowScale"> Maßstab, Einheit und Datum unten anzeigen</label>
+  <label><input type="checkbox" id="ShowScale"> <span class="t" data-en="Show scale, unit and date at the bottom">Maßstab, Einheit und Datum unten anzeigen</span></label>
 </fieldset>
 
 <fieldset>
-  <legend>Seite</legend>
-  <label><input type="radio" name="ScaleMode" value="1"> Auf A4 einpassen</label>&nbsp;&nbsp;
-  <label><input type="radio" name="ScaleMode" value="2"> Maßstab 1:1</label>
+  <legend><span class="t" data-en="Page">Seite</span></legend>
+  <label><input type="radio" name="ScaleMode" value="1"> <span class="t" data-en="Fit to A4">Auf A4 einpassen</span></label>&nbsp;&nbsp;
+  <label><input type="radio" name="ScaleMode" value="2"> <span class="t" data-en="Scale 1:1">Maßstab 1:1</span></label>
   <table>
-    <tr><td>Rand:</td><td><input class="num" type="text" id="Margin"> mm</td></tr>
+    <tr><td><span class="t" data-en="Margin:">Rand:</span></td><td><input class="num" type="text" id="Margin"> mm</td></tr>
   </table>
-  <label><input type="checkbox" id="DrawBorder"> Materialumriss grau mitdrucken</label>
+  <label><input type="checkbox" id="DrawBorder"> <span class="t" data-en="Print material outline in grey">Materialumriss grau mitdrucken</span></label>
 </fieldset>
 
 <div class="buttons">
   <input id="ButtonOK" class="FormButton" type="button" value="OK">
-  <input id="ButtonCancel" class="FormButton" type="button" value="Abbrechen">
+  <input id="ButtonCancel" class="FormButton" type="button" value="Abbrechen" data-en="Cancel">
 </div>
 <script type="text/javascript">
+// Einfaches JavaScript (ES3), damit es auch in der Dialog-Ansicht von VCarve laeuft.
+
+// Gewaehlte Sprache: 1 = Deutsch, 2 = English
+function currentLang() {
+  var r = document.getElementsByName("Lang");
+  for (var i = 0; i < r.length; i++) { if (r[i].checked) return r[i].value; }
+  return "1";
+}
+
+// Alle Texte mit class "t" umschalten (deutscher Text wird beim ersten Mal gemerkt)
+var shownLang = "";
+function syncLang() {
+  var lang = currentLang();
+  if (lang == shownLang) return;
+  shownLang = lang;
+  var all = document.getElementsByTagName("span");
+  for (var i = 0; i < all.length; i++) {
+    var el = all[i];
+    if ((" " + el.className + " ").indexOf(" t ") < 0) continue;
+    if (el.getAttribute("data-de") == null) el.setAttribute("data-de", el.innerHTML);
+    el.innerHTML = (lang == "2") ? el.getAttribute("data-en") : el.getAttribute("data-de");
+  }
+  var cancel = document.getElementById("ButtonCancel");
+  if (cancel) {
+    if (cancel.getAttribute("data-de") == null) cancel.setAttribute("data-de", cancel.value);
+    cancel.value = (lang == "2") ? cancel.getAttribute("data-en") : cancel.getAttribute("data-de");
+  }
+}
+
 // Maß-Layer-Feld ausgrauen, solange "ausblenden" angekreuzt ist.
 // readOnly statt disabled, damit VCarve den Wert weiterhin lesen kann.
 function syncDimLayer() {
@@ -100,8 +142,11 @@ function syncDimLayer() {
   tf.readOnly = cb.checked;
   tf.className = cb.checked ? "num off" : "num";
 }
-// VCarve setzt die Werte erst nach dem Laden -> Zustand regelmäßig abgleichen
-setInterval(syncDimLayer, 200);
+
+function syncAll() { syncLang(); syncDimLayer(); }
+
+// VCarve setzt die Werte erst nach dem Laden -> Zustand regelmaessig abgleichen
+setInterval(syncAll, 200);
 </script>
 </body>
 </html>
