@@ -587,18 +587,27 @@ function main(script_path)
   local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 870, "Vektor_PDF " .. VERSION)
   dialog:AddRadioGroup("Lang", lang)
   dialog:AddTextField("Version", "v" .. VERSION)
-  dialog:AddDoubleField("LineWidth", reg:GetDouble("LineWidth", 0.5))
-  dialog:AddDoubleField("DimLineWidth", reg:GetDouble("DimLineWidth", 0.25))
-  dialog:AddDoubleField("ArrowSize", reg:GetDouble("ArrowSize", 2.5))
+  -- Zahlenfelder als Text: Komma und Punkt werden beide akzeptiert
+  local function NumStr(v)                            -- Anzeige passend zur Sprache
+    local str = string.format("%.3f", v)
+    str = str:gsub("0+$", "")
+    str = str:gsub("%.$", "")
+    if lang ~= 2 then str = str:gsub("%.", ",") end
+    return str
+  end
+  local function AddNum(id, default) dialog:AddTextField(id, NumStr(reg:GetDouble(id, default))) end
+  AddNum("LineWidth", 0.5)
+  AddNum("DimLineWidth", 0.25)
+  AddNum("ArrowSize", 2.5)
   dialog:AddRadioGroup("VecColor", reg:GetInt("VecColor", 1))
-  dialog:AddDoubleField("Margin", reg:GetDouble("Margin", 10))
-  dialog:AddDoubleField("FontSize", reg:GetDouble("FontSize", 3.5))
+  AddNum("Margin", 10)
+  AddNum("FontSize", 3.5)
   dialog:AddRadioGroup("ScaleMode", reg:GetInt("ScaleMode", 1))
   dialog:AddRadioGroup("Source", job.Selection.IsEmpty and 2 or 1)
   dialog:AddCheckBox("DrawBorder", reg:GetBool("DrawBorder", false))
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
-  dialog:AddDoubleField("MinDim", reg:GetDouble("MinDim", 25))
+  AddNum("MinDim", 25)
   dialog:AddCheckBox("DimRadius", reg:GetBool("DimRadius", false))
   dialog:AddCheckBox("DimAngle", reg:GetBool("DimAngle", false))
   dialog:AddTextField("DimLayer", reg:GetString("DimLayer", "Bemassung"))
@@ -612,18 +621,42 @@ function main(script_path)
 
   lang = dialog:GetRadioIndex("Lang")
   reg:SetInt("Lang", lang)
-  local line_mm     = dialog:GetDoubleField("LineWidth")
-  local dim_line_mm = dialog:GetDoubleField("DimLineWidth")
-  local arrow_mm    = dialog:GetDoubleField("ArrowSize")
+  local bad = {}
+  local function GetNum(id)                           -- "0,5" und "0.5" -> 0.5
+    local t = (dialog:GetTextField(id) or ""):gsub("%s", "")
+    t = t:gsub(",", ".")
+    local v = tonumber(t)
+    if v == nil then
+      local names = {
+        LineWidth    = T("Linienstaerke", "Line width"),
+        DimLineWidth = T("Linienstaerke Bemassung", "Dimension line width"),
+        ArrowSize    = T("Pfeilgroesse", "Arrow size"),
+        Margin       = T("Rand", "Margin"),
+        FontSize     = T("Schriftgroesse", "Font size"),
+        MinDim       = T("Einzelmasse ab", "Min. size"),
+      }
+      bad[#bad + 1] = names[id] or id
+      v = 0
+    end
+    return v
+  end
+  local line_mm     = GetNum("LineWidth")
+  local dim_line_mm = GetNum("DimLineWidth")
+  local arrow_mm    = GetNum("ArrowSize")
   local vec_color   = dialog:GetRadioIndex("VecColor")
-  local margin_mm   = dialog:GetDoubleField("Margin")
-  local font_mm     = dialog:GetDoubleField("FontSize")
+  local margin_mm   = GetNum("Margin")
+  local font_mm     = GetNum("FontSize")
   local scale_mode  = dialog:GetRadioIndex("ScaleMode")      -- 1 = A4, 2 = 1:1
   local selected_only = dialog:GetRadioIndex("Source") == 1
   local draw_border = dialog:GetCheckBox("DrawBorder")
   local dim_overall = dialog:GetCheckBox("DimOverall")
   local dim_each    = dialog:GetCheckBox("DimEach")
-  local min_dim_mm  = dialog:GetDoubleField("MinDim")
+  local min_dim_mm  = GetNum("MinDim")
+  if #bad > 0 then
+    DisplayMessageBox(T("Bitte gueltige Zahlen eingeben (Komma oder Punkt): ",
+                        "Please enter valid numbers (comma or point): ") .. table.concat(bad, ", "))
+    return false
+  end
   local dim_radius  = dialog:GetCheckBox("DimRadius")
   local dim_angle   = dialog:GetCheckBox("DimAngle")
   local dim_layer   = dialog:GetTextField("DimLayer") or ""
@@ -901,7 +934,7 @@ function main(script_path)
 
   local msg = "Vektor_PDF v" .. VERSION .. "\n\n" ..
               T("PDF gespeichert:\n", "PDF saved:\n") .. fd.PathName ..
-              "\n\n" .. #paths .. T(" Vektoren, Linienstaerke ", " vectors, line width ") .. line_mm .. " mm"
+              "\n\n" .. #paths .. T(" Vektoren, Linienstaerke ", " vectors, line width ") .. NumStr(line_mm) .. " mm"
   local n_group = 0
   for _, p in ipairs(paths) do if p.in_group then n_group = n_group + 1 end end
   if #dim_lines > 0 then
