@@ -15,7 +15,7 @@ Gadget für **Vectric VCarve Pro / Aspire** (ab V12), das Vektoren als **PDF-Zei
   - Einzelmaße erst ab einer Mindestgröße (z. B. keine Maße an Buchstaben)
   - Farbe, Linienstärke und Pfeilgröße der Bemaßung wählbar
   - optional Radien an Bögen (R …)
-  - **manuelle Maße** über einen eigenen Layer (siehe unten)
+  - **manuelle Maße und Winkel** über einen eigenen Layer (siehe unten)
 - **Titel** und **Notiz** oben auf dem Blatt
 - **Maßstab, Einheit (mm/Zoll) und Datum** in der Fußzeile
 - Seitenformat: **auf A4 einpassen** (Hoch-/Querformat automatisch) oder **Maßstab 1:1**
@@ -58,6 +58,9 @@ Für Maße, die das Gadget nicht automatisch erzeugt (z. B. Abstand zwischen zwe
 2. Auf diesem Layer eine **Linie** von Punkt zu Punkt zeichnen – am besten mit Fangen an den Kanten.
 3. Das Gadget druckt die Linie nicht als Vektor, sondern als **Maß** mit Pfeilen und Länge
    (waagrecht, senkrecht oder schräg – je nach Richtung der Linie).
+
+**Winkel:** Eine Linie mit **drei Punkten** in V-Form entlang der beiden Kanten zeichnen – der
+mittlere Punkt ist die Ecke (Scheitel). Das Gadget druckt einen Bogen mit Pfeilen und dem Winkel, z. B. `45°`.
 
 Sollen die manuellen Maße nicht gedruckt werden, im Dialog neben „Maß-Layer“ **ausblenden**
 ankreuzen (oder den Layer in VCarve ausblenden).

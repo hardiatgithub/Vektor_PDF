@@ -17,7 +17,7 @@ Handy for sending a customer a quick dimensioned sketch, printing a template 1:1
   - minimum size for individual dimensions (e.g. no dimensions on lettering)
   - optional radii on arcs (R …)
   - colour, line width and arrow size of the dimensions adjustable
-- **Manual dimensions** via a dedicated layer (see below)
+- **Manual dimensions and angles** via a dedicated layer (see below)
 - **Title** and **note** at the top of the sheet
 - **Scale, unit (mm/inch) and date** in the footer
 - Page: **fit to A4** (portrait/landscape automatic) or **scale 1:1**
@@ -64,6 +64,9 @@ For dimensions the gadget cannot create automatically – e.g. the gap between t
 2. On that layer, draw a **line** from point to point – snapping to the edges works best.
 3. The gadget does not print this line as a vector but as a **dimension** with arrows and length –
    horizontal, vertical or aligned, depending on the direction of the line.
+
+**Angles:** draw a line with **three points** in a V shape along the two edges – the middle point
+is the corner (vertex). The gadget prints an arc with arrows and the angle, e.g. `45°`.
 
 Tick **hide** next to *Dim. layer* to leave the manual dimensions out of the PDF
 (or simply hide the layer in VCarve).

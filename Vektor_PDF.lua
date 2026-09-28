@@ -255,8 +255,12 @@ local function NormName(s)
 end
 
 local function LayerName(layer)
-  local ok, n = pcall(function() return layer.Name end)
-  if ok and type(n) == "string" then return n end
+  -- Name je nach API-Version als Eigenschaft oder Methode
+  for _, key in ipairs({ "Name", "GetName", "LayerName" }) do
+    local ok, n = pcall(function() return layer[key] end)
+    if ok and type(n) == "function" then ok, n = pcall(n, layer) end
+    if ok and type(n) == "string" and n ~= "" then return n end
+  end
   return ""
 end
 
@@ -277,13 +281,38 @@ local function ContourEnds(contour)
   return nil
 end
 
--- Hilfslinien auf dem Bemassungs-Layer -> { {x1,y1,x2,y2}, ... }
+-- Alle Eckpunkte einer Kontur (Start + Endpunkt jedes Spans)
+local function ContourPoints(contour)
+  local ok, pts = pcall(function()
+    local list = {}
+    local pos = contour:GetHeadPosition()
+    while pos ~= nil do
+      local span
+      span, pos = contour:GetNext(pos)
+      if #list == 0 then list[1] = { span.StartPoint2D.X, span.StartPoint2D.Y } end
+      list[#list + 1] = { span.EndPoint2D.X, span.EndPoint2D.Y }
+    end
+    return list
+  end)
+  if ok then return pts end
+  return {}
+end
+
+-- Hilfslinien auf dem Bemassungs-Layer:
+--   Linie mit 2 Punkten       -> Laengenmass  { x1,y1,x2,y2 }
+--   Linie mit 3 Punkten (V)   -> Winkelmass   { ax,ay,bx,by, angle = true, vx, vy }
+--                                (mittlerer Punkt = Scheitel des Winkels)
 local function ContoursToDimLines(list)
   local lines = {}
   for _, c in ipairs(list) do
-    local x1, y1, x2, y2 = ContourEnds(c.contour)
-    if x1 and not c.contour.IsClosed then
-      lines[#lines + 1] = { x1, y1, x2, y2 }
+    if not c.contour.IsClosed then
+      local pts = ContourPoints(c.contour)
+      if #pts == 3 then
+        lines[#lines + 1] = { pts[1][1], pts[1][2], pts[3][1], pts[3][2],
+                              angle = true, vx = pts[2][1], vy = pts[2][2] }
+      elseif #pts >= 2 then
+        lines[#lines + 1] = { pts[1][1], pts[1][2], pts[#pts][1], pts[#pts][2] }
+      end
     end
   end
   return lines
@@ -291,13 +320,20 @@ end
 
 local function CollectContours(job, selected_only, dim_layer)
   local contours, dim_list = {}, {}
+  local info = { names = {}, found = false, hidden = false }
   local dim_name = NormName(dim_layer)
   local lm = job.LayerManager
   local lpos = lm:GetHeadPosition()
   while lpos ~= nil do
     local layer
     layer, lpos = lm:GetNext(lpos)
-    local is_dim = dim_name ~= "" and NormName(LayerName(layer)) == dim_name
+    local lname = LayerName(layer)
+    info.names[#info.names + 1] = (lname ~= "" and lname or "?") .. (layer.Visible and "" or " (-)")
+    local is_dim = dim_name ~= "" and NormName(lname) == dim_name
+    if is_dim then
+      info.found = true
+      if not layer.Visible then info.hidden = true end
+    end
     if layer.Visible and (is_dim or not selected_only) then
       local pos = layer:GetHeadPosition()
       while pos ~= nil do
@@ -308,6 +344,7 @@ local function CollectContours(job, selected_only, dim_layer)
     end
   end
   local dim_lines = ContoursToDimLines(dim_list)
+  info.objects = #dim_list
   if selected_only then
     local sel = job.Selection
     local pos = sel:GetHeadPosition()
@@ -332,7 +369,7 @@ local function CollectContours(job, selected_only, dim_layer)
     end
     contours = keep
   end
-  return contours, dim_lines
+  return contours, dim_lines, info
 end
 
 -- ------------------------------------------------------------------
@@ -413,6 +450,45 @@ function Draw:alignedDim(x1, y1, x2, y2, label)
   local tnx, tny = -math.sin(ang), math.cos(ang)   -- "oberhalb" des Textes
   local mx, my = (x1 + x2) / 2 + tnx * 1 * MM, (y1 + y2) / 2 + tny * 1 * MM
   self:textAngle(mx, my, label, ang)
+end
+-- Winkelmass: Scheitel vx,vy, Schenkel Richtung a und b (alles in PDF-Punkten)
+function Draw:angleDim(vx, vy, ax, ay, bx, by, label)
+  local la = math.sqrt((ax - vx) ^ 2 + (ay - vy) ^ 2)
+  local lb = math.sqrt((bx - vx) ^ 2 + (by - vy) ^ 2)
+  if la < 1e-6 or lb < 1e-6 then return end
+  local a1 = atan2(ay - vy, ax - vx)
+  local sweep = atan2(by - vy, bx - vx) - a1
+  while sweep > math.pi do sweep = sweep - 2 * math.pi end
+  while sweep <= -math.pi do sweep = sweep + 2 * math.pi end
+  if sweep < 0 then a1, sweep = a1 + sweep, -sweep end        -- immer gegen den Uhrzeigersinn
+  -- Bogenradius: hoechstens 15 mm, nicht laenger als der kuerzere Schenkel (min. 6 mm)
+  local r = math.max(6 * MM, math.min(15 * MM, math.min(la, lb)))
+  -- Schenkel bis zum Bogen verlaengern, falls sie kuerzer sind
+  local function leg(len, ang)
+    if len < r then
+      self:line(vx + math.cos(ang) * len, vy + math.sin(ang) * len,
+                vx + math.cos(ang) * (r + 1 * MM), vy + math.sin(ang) * (r + 1 * MM))
+    end
+  end
+  leg(la, atan2(ay - vy, ax - vx)); leg(lb, atan2(by - vy, bx - vx))
+  -- Bogen als Polylinie
+  local n = math.max(8, math.ceil(sweep * 24))
+  local parts = { f(vx + r * math.cos(a1)) .. " " .. f(vy + r * math.sin(a1)) .. " m" }
+  for i = 1, n do
+    local a = a1 + sweep * i / n
+    parts[#parts + 1] = f(vx + r * math.cos(a)) .. " " .. f(vy + r * math.sin(a)) .. " l"
+  end
+  self:add(table.concat(parts, " ") .. " S")
+  -- Pfeile an beiden Bogenenden (tangential)
+  local a2 = a1 + sweep
+  local inside = r * sweep > 2.5 * self.arrow                   -- genug Platz fuer Pfeile innen?
+  local s1 = inside and 1 or -1
+  self:arrowhead(vx + r * math.cos(a1), vy + r * math.sin(a1), s1 * math.sin(a1), -s1 * math.cos(a1))
+  self:arrowhead(vx + r * math.cos(a2), vy + r * math.sin(a2), -s1 * math.sin(a2), s1 * math.cos(a2))
+  -- Text ausserhalb der Bogenmitte
+  local am = a1 + sweep / 2
+  local tr = r + 1.5 * MM + self.fs * 0.8
+  self:text(vx + tr * math.cos(am), vy + tr * math.sin(am) - self.fs * 0.35, label)
 end
 -- Radius: Pfeil von aussen auf den Bogen (Punkt px,py), Mittelpunkt cx,cy
 function Draw:radius(cx, cy, px, py, label)
@@ -573,12 +649,17 @@ function main(script_path)
     end
     return string.format('%.3f"', v)
   end
+  local function fmtAng(deg)                           -- Winkel mit Gradzeichen
+    local s = string.format("%.1f", deg):gsub("%.0$", "")
+    if lang ~= 2 then s = s:gsub("%.", ",") end
+    return s .. "\194\176"
+  end
 
   -- Konturen
   skipped = 0
   bezier_fallback = 0
   bezier_info = nil
-  local contours, dim_lines = CollectContours(job, selected_only, dim_layer)
+  local contours, dim_lines, dim_info = CollectContours(job, selected_only, dim_layer)
   if hide_dims then dim_lines = {} end      -- Hilfslinien bleiben trotzdem aus der Zeichnung
   if #contours == 0 then
     DisplayMessageBox(T("Keine Vektoren gefunden.", "No vectors found."))
@@ -597,6 +678,10 @@ function main(script_path)
   for _, l in ipairs(dim_lines) do                              -- Platz fuer manuelle Masse
     minx = math.min(minx, l[1], l[3]); miny = math.min(miny, l[2], l[4])
     maxx = math.max(maxx, l[1], l[3]); maxy = math.max(maxy, l[2], l[4])
+    if l.angle then
+      minx = math.min(minx, l.vx); miny = math.min(miny, l.vy)
+      maxx = math.max(maxx, l.vx); maxy = math.max(maxy, l.vy)
+    end
   end
 
   local border = nil
@@ -722,8 +807,17 @@ function main(script_path)
 
   -- Manuelle Masse aus den Hilfslinien des Bemassungs-Layers
   for _, l in ipairs(dim_lines) do
-    local len = math.sqrt((l[3] - l[1]) ^ 2 + (l[4] - l[2]) ^ 2)
-    d:alignedDim(tx(l[1]), ty(l[2]), tx(l[3]), ty(l[4]), fmt(len))
+    if l.angle then
+      local a1 = atan2(l[2] - l.vy, l[1] - l.vx)
+      local sw = atan2(l[4] - l.vy, l[3] - l.vx) - a1
+      while sw > math.pi do sw = sw - 2 * math.pi end
+      while sw <= -math.pi do sw = sw + 2 * math.pi end
+      d:angleDim(tx(l.vx), ty(l.vy), tx(l[1]), ty(l[2]), tx(l[3]), ty(l[4]),
+                 fmtAng(math.abs(sw) * 180 / math.pi))
+    else
+      local len = math.sqrt((l[3] - l[1]) ^ 2 + (l[4] - l[2]) ^ 2)
+      d:alignedDim(tx(l[1]), ty(l[2]), tx(l[3]), ty(l[4]), (fmt(len)))
+    end
   end
 
   -- 3) Titel, Notiz, Massstab (immer schwarz)
@@ -771,7 +865,24 @@ function main(script_path)
   local n_group = 0
   for _, p in ipairs(paths) do if p.in_group then n_group = n_group + 1 end end
   if #dim_lines > 0 then
-    msg = msg .. "\n" .. #dim_lines .. T(" manuelle(s) Mass(e) vom Layer \"", " manual dimension(s) from layer \"") .. dim_layer .. "\""
+    local n_ang = 0
+    for _, l in ipairs(dim_lines) do if l.angle then n_ang = n_ang + 1 end end
+    msg = msg .. "\n" .. (#dim_lines - n_ang) .. T(" Laengenmass(e), ", " length dimension(s), ") ..
+          n_ang .. T(" Winkelmass(e) vom Layer \"", " angle dimension(s) from layer \"") .. dim_layer .. "\""
+  elseif dim_layer ~= "" and not hide_dims then
+    -- Hilfe, wenn keine manuellen Masse gefunden wurden
+    if not dim_info.found then
+      msg = msg .. T("\n\nHinweis: Mass-Layer \"", "\n\nNote: dimension layer \"") .. dim_layer ..
+            T("\" nicht gefunden.\nVorhandene Layer: ", "\" not found.\nExisting layers: ") ..
+            table.concat(dim_info.names, ", ")
+    elseif dim_info.hidden then
+      msg = msg .. T("\n\nHinweis: Mass-Layer \"", "\n\nNote: dimension layer \"") .. dim_layer ..
+            T("\" ist in VCarve ausgeblendet.", "\" is hidden in VCarve.")
+    else
+      msg = msg .. T("\n\nHinweis: Auf dem Mass-Layer \"", "\n\nNote: dimension layer \"") .. dim_layer ..
+            T("\" wurden keine offenen Linien gefunden (", "\" contains no open lines (") ..
+            dim_info.objects .. T(" Objekt(e)).", " object(s)).")
+    end
   end
   if dim_each then
     msg = msg .. "\n(" .. n_group .. T(" davon in Gruppen - ohne Einzelmasse)", " of them in groups - no individual dimensions)")

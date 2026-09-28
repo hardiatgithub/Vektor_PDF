@@ -7,6 +7,10 @@ Neueste Version steht oben.
 
 ### Neu
 - **Versionsnummer** wird im Fenstertitel, oben im Dialog und in der Abschlussmeldung angezeigt.
+- **Winkelmaß**: Eine Linie mit **3 Punkten** (V-Form) auf dem Maß-Layer wird als Winkel bemaßt –
+  der mittlere Punkt ist der Scheitel. Bogen mit Pfeilen und Gradzahl (z. B. 45°).
+- Abschlussmeldung zeigt Anzahl der Längen- und Winkelmaße; findet das Gadget keine manuellen Maße,
+  nennt sie den Grund (Layer nicht gefunden – mit Liste der vorhandenen Layer –, ausgeblendet oder leer).
 - Englische Anleitung für Vectric-Nutzer: **README.md** ist jetzt Englisch (GitHub-Startseite),
   die deutsche Anleitung liegt in **README.de.md**; beide verweisen aufeinander.
 
