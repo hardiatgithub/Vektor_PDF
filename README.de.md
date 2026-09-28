@@ -15,6 +15,7 @@ Gadget für **Vectric VCarve Pro / Aspire** (ab V12), das Vektoren als **PDF-Zei
   - Einzelmaße erst ab einer Mindestgröße (z. B. keine Maße an Buchstaben)
   - Farbe, Linienstärke und Pfeilgröße der Bemaßung wählbar
   - optional Radien an Bögen (R …)
+  - optional Winkel an Ecken zwischen zwei Geraden (rechte Winkel werden ausgelassen)
   - **manuelle Maße und Winkel** über einen eigenen Layer (siehe unten)
 - **Titel** und **Notiz** oben auf dem Blatt
 - **Maßstab, Einheit (mm/Zoll) und Datum** in der Fußzeile

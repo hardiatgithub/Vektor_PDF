@@ -155,9 +155,27 @@ local function ArcInfo(x1, y1, x2, y2, bulge)
   return { cx = cx, cy = cy, r = r, px = cx + r * math.cos(am), py = cy + r * math.sin(am) }
 end
 
+-- Ecken zwischen zwei aufeinanderfolgenden Geraden -> { {vx,vy,ax,ay,bx,by,deg}, ... }
+local function PathCorners(p)
+  local corners, segs, n = {}, p.segs, #p.segs
+  local last = p.closed and n or n - 1
+  for i = 1, last do
+    local s1, s2 = segs[i], segs[(i % n) + 1]
+    if s1 and s2 and (i < n or p.closed) and
+       math.abs(s1[3] - s2[1]) + math.abs(s1[4] - s2[2]) < 1e-6 then
+      local a1 = atan2(s1[2] - s1[4], s1[1] - s1[3])     -- vom Scheitel zurueck
+      local a2 = atan2(s2[4] - s2[2], s2[3] - s2[1])     -- vom Scheitel weiter
+      local d = math.abs(a2 - a1)
+      if d > math.pi then d = 2 * math.pi - d end
+      corners[#corners + 1] = { s1[3], s1[4], s1[1], s1[2], s2[3], s2[4], d * 180 / math.pi }
+    end
+  end
+  return corners
+end
+
 -- Kontur -> { cmds = {...}, arcs = {...}, closed, all_arcs, minx, miny, maxx, maxy }
 local function ContourToPath(contour, seg_len)
-  local p = { cmds = {}, arcs = {}, all_arcs = true, closed = contour.IsClosed,
+  local p = { cmds = {}, arcs = {}, segs = {}, all_arcs = true, closed = contour.IsClosed,
               minx = math.huge, miny = math.huge, maxx = -math.huge, maxy = -math.huge }
   local cmds = p.cmds
   local first = true
@@ -177,8 +195,10 @@ local function ContourToPath(contour, seg_len)
       end
       local ai = ArcInfo(p1.X, p1.Y, p2.X, p2.Y, arc.Bulge)
       if ai then p.arcs[#p.arcs + 1] = ai end
+      p.segs[#p.segs + 1] = false                     -- kein gerades Stueck
     elseif span.IsBezierType then
       p.all_arcs = false
+      p.segs[#p.segs + 1] = false
       local bez = CastSpanToBezierSpan(span)
       local c1, c2 = BezierControl(bez, 1), BezierControl(bez, 2)
       if c1 and c2 then
@@ -197,6 +217,7 @@ local function ContourToPath(contour, seg_len)
     else
       p.all_arcs = false
       cmds[#cmds + 1] = { "l", p2.X, p2.Y }
+      p.segs[#p.segs + 1] = { p1.X, p1.Y, p2.X, p2.Y }
     end
   end
   if p.closed then cmds[#cmds + 1] = { "h" } end
@@ -563,7 +584,7 @@ function main(script_path)
     return false
   end
 
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 850, "Vektor_PDF " .. VERSION)
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 870, "Vektor_PDF " .. VERSION)
   dialog:AddRadioGroup("Lang", lang)
   dialog:AddTextField("Version", "v" .. VERSION)
   dialog:AddDoubleField("LineWidth", reg:GetDouble("LineWidth", 0.5))
@@ -579,6 +600,7 @@ function main(script_path)
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
   dialog:AddDoubleField("MinDim", reg:GetDouble("MinDim", 25))
   dialog:AddCheckBox("DimRadius", reg:GetBool("DimRadius", false))
+  dialog:AddCheckBox("DimAngle", reg:GetBool("DimAngle", false))
   dialog:AddTextField("DimLayer", reg:GetString("DimLayer", "Bemassung"))
   dialog:AddCheckBox("HideDimLayer", reg:GetBool("HideDimLayer", false))
   dialog:AddRadioGroup("DimColor", reg:GetInt("DimColor", 1))
@@ -603,6 +625,7 @@ function main(script_path)
   local dim_each    = dialog:GetCheckBox("DimEach")
   local min_dim_mm  = dialog:GetDoubleField("MinDim")
   local dim_radius  = dialog:GetCheckBox("DimRadius")
+  local dim_angle   = dialog:GetCheckBox("DimAngle")
   local dim_layer   = dialog:GetTextField("DimLayer") or ""
   local hide_dims   = dialog:GetCheckBox("HideDimLayer")
   local dim_color   = dialog:GetRadioIndex("DimColor")   -- 1 schwarz, 2 blau, 3 rot, 4 gruen, 5 grau
@@ -622,6 +645,7 @@ function main(script_path)
   reg:SetBool("DimEach", dim_each)
   reg:SetDouble("MinDim", min_dim_mm)
   reg:SetBool("DimRadius", dim_radius)
+  reg:SetBool("DimAngle", dim_angle)
   reg:SetString("DimLayer", dim_layer)
   reg:SetBool("HideDimLayer", hide_dims)
   reg:SetInt("DimColor", dim_color)
@@ -799,6 +823,22 @@ function main(script_path)
           if not seen and a.r > tol then
             done[#done + 1] = a.r
             d:radius(tx(a.cx), ty(a.cy), tx(a.px), ty(a.py), "R " .. fmt(a.r))
+          end
+        end
+      end
+    end
+  end
+
+  -- Winkel an Ecken zwischen zwei Geraden (90 und 180 Grad werden ausgelassen)
+  if dim_angle then
+    local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4
+    for _, p in ipairs(paths) do
+      local pw, ph = p.maxx - p.minx, p.maxy - p.miny
+      if not p.in_group and math.max(pw, ph) >= min_dim then
+        for _, cn in ipairs(PathCorners(p)) do
+          local deg = cn[7]
+          if math.abs(deg - 90) > 0.5 and deg > 0.5 and deg < 179.5 then
+            d:angleDim(tx(cn[1]), ty(cn[2]), tx(cn[3]), ty(cn[4]), tx(cn[5]), ty(cn[6]), fmtAng(deg))
           end
         end
       end

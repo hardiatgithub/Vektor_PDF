@@ -16,6 +16,7 @@ Handy for sending a customer a quick dimensioned sketch, printing a template 1:1
   - optional size of every closed vector, circles as diameter (Ø)
   - minimum size for individual dimensions (e.g. no dimensions on lettering)
   - optional radii on arcs (R …)
+  - optional angles at corners between straight edges (right angles are skipped)
   - colour, line width and arrow size of the dimensions adjustable
 - **Manual dimensions and angles** via a dedicated layer (see below)
 - **Title** and **note** at the top of the sheet
