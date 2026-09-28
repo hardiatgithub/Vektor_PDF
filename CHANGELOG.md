@@ -5,6 +5,8 @@ Neueste Version steht oben.
 
 ## [Unveröffentlicht]
 
+## [1.3.2] – 2026-09-28
+
 ### Neu
 - **Versionsnummer** wird im Fenstertitel, oben im Dialog und in der Abschlussmeldung angezeigt.
 - **Winkelmaß**: Eine Linie mit **3 Punkten** (V-Form) auf dem Maß-Layer wird als Winkel bemaßt –
