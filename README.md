@@ -9,6 +9,7 @@ Handy for sending a customer a quick dimensioned sketch, printing a template 1:1
 ## Features
 
 - Export **selected vectors** or **all visible layers** (groups included)
+- Jobs with **several sheets**: export the current sheet or all sheets as a **multi-page PDF**
 - Lines, arcs and Bézier curves are written to the PDF as real vector graphics
 - **Line width** and **colour** of the vectors adjustable
 - **Automatic dimensions**

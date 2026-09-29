@@ -7,6 +7,7 @@ Gadget für **Vectric VCarve Pro / Aspire** (ab V12), das Vektoren als **PDF-Zei
 ## Funktionen
 
 - Export von **ausgewählten Vektoren** oder **allen sichtbaren Ebenen** (inkl. Gruppen)
+- Jobs mit **mehreren Seiten (Sheets)**: aktuelle Seite oder alle Seiten als **mehrseitiges PDF**
 - Linien, Bögen und Bézierkurven werden als echte Vektoren ins PDF geschrieben
 - **Linienstärke** und **Farbe** der Vektoren einstellbar (z. B. 0,3 fein · 0,5 normal · 1,0 kräftig)
 - **Automatische Bemaßung**
