@@ -2,21 +2,27 @@
 <html>
 <head>
 <meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
 <title>PDF Export</title>
 <style>
+  html, body { overflow: auto; }
   body { font-family: Arial, sans-serif; font-size: 12px; background: #f0f0f0; margin: 12px; }
   h2 { font-size: 14px; margin: 0 0 10px 0; }
   .lang { float: right; font-size: 11px; font-weight: normal; }
   fieldset { border: 1px solid #bbb; margin-bottom: 8px; padding: 6px 8px; }
   legend { font-weight: bold; }
   td { padding: 2px 4px; }
-  input.num { width: 60px; text-align: right; }
-  input.txt { width: 330px; }
+  /* Eingabefelder: Schrift fest vorgeben (sonst nimmt der Dialog die System-Schrift, die bei
+     hoher Skalierung zu gross fuer die Felder wird) und Breite relativ zur Schrift (em) */
+  input, select, button { font-family: Arial, sans-serif; font-size: 12px; }
+  input[type=text] { padding: 1px 3px; height: 1.6em; line-height: 1.4em; box-sizing: border-box; }
+  input.num { width: 5.5em; text-align: right; }
+  input.txt { width: 27em; }
   .hint { color: #666; font-size: 11px; }
   .buttons { text-align: right; margin-top: 10px; }
   .FormButton { width: 80px; margin-left: 6px; }
   input.off { background: #e4e4e4; color: #999; border-color: #ccc; }
-  input.ver { border: 0; background: transparent; color: #888; font-size: 11px; width: 60px; padding: 0; }
+  input.ver { border: 0; background: transparent; color: #888; font-size: 11px; width: 10em; padding: 0; }
 </style>
 </head>
 <body>
@@ -61,7 +67,7 @@
   <label><input type="checkbox" id="DimAngle"> <span class="t" data-en="Angles at corners (except 90°)">Winkel an Ecken (ohne 90°)</span></label>
   <table>
     <tr><td><span class="t" data-en="Dim. layer:">Maß-Layer:</span></td>
-      <td><input class="num" style="width:120px" type="text" id="DimLayer">
+      <td><input class="num" style="width:10em; text-align:left" type="text" id="DimLayer">
       &nbsp;<label><input type="checkbox" id="HideDimLayer" onclick="syncAll()"> <span class="t" data-en="hide">ausblenden</span></label>
       <br><span class="hint t" data-en="Lines on this layer are printed as dimensions · 3 points (V) = angle">Linien auf diesem Layer werden als Maß gedruckt · 3 Punkte (V) = Winkel</span></td></tr>
   </table>
@@ -128,6 +134,7 @@ var shownLang = "";
 function syncLang() {
   var lang = currentLang();
   if (lang == shownLang) return;
+  var first = (shownLang == "");
   shownLang = lang;
   var all = document.getElementsByTagName("span");
   for (var i = 0; i < all.length; i++) {
@@ -141,6 +148,7 @@ function syncLang() {
     if (cancel.getAttribute("data-de") == null) cancel.setAttribute("data-de", cancel.value);
     cancel.value = (lang == "2") ? cancel.getAttribute("data-en") : cancel.getAttribute("data-de");
   }
+  if (!first) fitToWindow();          // Textlaengen haben sich geaendert
 }
 
 // Maß-Layer-Feld ausgrauen, solange "ausblenden" angekreuzt ist.
@@ -154,6 +162,23 @@ function syncDimLayer() {
 }
 
 function syncAll() { syncLang(); syncDimLayer(); }
+
+// Bei hoher Bildschirm-Skalierung (z. B. 150 %) wird die Schrift groesser, das Fenster aber nicht:
+// Inhalt dann so weit verkleinern, dass alles inkl. OK/Abbrechen ins Fenster passt.
+function fitToWindow() {
+  var b = document.body, de = document.documentElement;
+  if (!b) return;
+  b.style.zoom = 1;
+  var availH = de.clientHeight || b.clientHeight;
+  var availW = de.clientWidth || b.clientWidth;
+  var needH = b.scrollHeight + 24;
+  var needW = b.scrollWidth + 24;
+  if (!availH || !availW || !needH || !needW) return;
+  var z = Math.min(1, availH / needH, availW / needW);
+  if (z < 1) b.style.zoom = Math.max(0.5, Math.floor(z * 100) / 100);
+}
+window.onload = function () { syncAll(); fitToWindow(); setTimeout(fitToWindow, 400); };
+window.onresize = fitToWindow;
 
 // VCarve setzt die Werte erst nach dem Laden -> Zustand regelmaessig abgleichen
 setInterval(syncAll, 200);

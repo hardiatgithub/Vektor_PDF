@@ -9,9 +9,14 @@
     C:\Users\Public\Documents\Vectric Files\Gadgets\<Programm> V12.5\  kopieren
 ]]
 
-local G_version = "dev"         -- bei jedem Release anpassen (siehe CHANGELOG.md)
+local G_version = "dev"         -- wird von MakeRelease.ps1 beim Release ersetzt (nicht von Hand aendern)
 local G_subVersion = "development"
 local G_title = "Vektor_PDF"
+-- Anzeige z. B. "1.4.0 beta.1" bzw. "dev development"
+local function VersionText()
+  if G_subVersion ~= nil and G_subVersion ~= "" then return G_version .. " " .. G_subVersion end
+  return G_version
+end
 
 local atan2 = math.atan2 or math.atan
 local MM = 72 / 25.4            -- Punkte je mm (PDF-Einheit)
@@ -696,9 +701,9 @@ function main(script_path)
     return false
   end
 
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF_".. G_version.. ".htm", 520, 870, string.format("%s - Version %s %s", G_title, G_version, G_subVersion))
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF_".. G_version.. ".htm", 520, 895, G_title .. " - Version " .. VersionText())
   dialog:AddRadioGroup("Lang", lang)
-  dialog:AddTextField("Version", "v" .. G_version)
+  dialog:AddTextField("Version", "v" .. VersionText())
   -- Zahlenfelder als Text: Komma und Punkt werden beide akzeptiert
   local function NumStr(v)                            -- Anzeige passend zur Sprache
     local str = string.format("%.3f", v)
@@ -1150,7 +1155,7 @@ function main(script_path)
     return false
   end
 
-  local msg = "Vektor_PDF v" .. G_version .. "\n\n" ..
+  local msg = G_title .. " v" .. VersionText() .. "\n\n" ..
               T("PDF gespeichert:\n", "PDF saved:\n") .. fd.PathName ..
               "\n\n" .. #paths .. T(" Vektoren, Linienstaerke ", " vectors, line width ") .. NumStr(line_mm) .. " mm"
   if #pages > 1 then
