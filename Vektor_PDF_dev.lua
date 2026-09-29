@@ -693,7 +693,7 @@ end
 -- bei "Abbrechen" gespeichert, sonst geht die Groesse wieder verloren.
 -- ------------------------------------------------------------------
 local WIN_W_DEFAULT = 520
-local WIN_H_DEFAULT = 870
+local WIN_H_DEFAULT = 895
 
 local function SaveWindowState(reg, dialog)
   if dialog.WindowWidth ~= nil and dialog.WindowWidth > 0 then
@@ -726,8 +726,8 @@ function main(script_path)
   if win_w < 300 then win_w = WIN_W_DEFAULT end
   if win_h < 300 then win_h = WIN_H_DEFAULT end
 
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF_".. G_version.. ".htm", win_w, win_h, G_title .. " - Version " .. VersionText())
   dialog:AddDropDownList("ZoomLevel", reg:GetString("ZoomLevel", "Auto"))
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF_".. G_version.. ".htm", 520, 895, G_title .. " - Version " .. VersionText())
   dialog:AddRadioGroup("Lang", lang)
   dialog:AddTextField("Version", "v" .. VersionText())
   -- Zahlenfelder als Text: Komma und Punkt werden beide akzeptiert

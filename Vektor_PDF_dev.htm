@@ -6,23 +6,38 @@
 <title>PDF Export</title>
 <style>
   html, body { overflow: auto; }
+  /* Skaliert wird nur die Grundschrift (siehe applyZoom): alle Schriftgroessen
+     und Feldbreiten sind in em davon abgeleitet, Breiten zusaetzlich in %
+     begrenzt. So wird der Text groesser, das Layout bleibt aber so breit wie
+     das Fenster -- kein seitliches Scrollen. */
   body { font-family: Arial, sans-serif; font-size: 12px; background: #f0f0f0; margin: 12px; }
-  h2 { font-size: 14px; margin: 0 0 10px 0; }
-  .lang { float: right; font-size: 11px; font-weight: normal; }
+  h2 { font-size: 1.17em; margin: 0 0 10px 0; }
+  .lang { float: right; font-size: 0.79em; font-weight: normal; }
   fieldset { border: 1px solid #bbb; margin-bottom: 8px; padding: 6px 8px; }
   legend { font-weight: bold; }
-  td { padding: 2px 4px; }
+  /* Tabellen so breit wie der Rahmen, damit die %-Grenzen der Felder greifen */
+  table { width: 100%; }
+  td { padding: 0.17em 0.33em; }
+  /* Beschriftungsspalte ohne Umbruch -- applyZoom setzt die Klasse nur,
+     solange dadurch nichts seitlich aus dem Fenster laeuft */
+  body.nowrapcol td:first-child { white-space: nowrap; }
   /* Eingabefelder: Schrift fest vorgeben (sonst nimmt der Dialog die System-Schrift, die bei
      hoher Skalierung zu gross fuer die Felder wird) und Breite relativ zur Schrift (em) */
-  input, select, button { font-family: Arial, sans-serif; font-size: 12px; }
+  input, select, button { font-family: Arial, sans-serif; font-size: 1em; }
   input[type=text] { padding: 1px 3px; height: 1.6em; line-height: 1.4em; box-sizing: border-box; }
+  /* Kaestchen und Punkte haben eine feste Groesse (13 px) und wachsen nicht
+     von allein mit der Schrift -- daher in em vorgeben */
+  input[type=checkbox], input[type=radio] { width: 1.1em; height: 1.1em; vertical-align: -0.15em; }
   input.num { width: 5.5em; text-align: right; }
-  input.txt { width: 27em; }
-  .hint { color: #666; font-size: 11px; }
+  /* breite Textfelder in %: eine em-Breite wuerde die Tabelle (und damit den
+     Rahmen) bei grosser Schrift breiter als das Fenster machen */
+  input.txt { width: 90%; }
+  .hint { color: #666; font-size: 0.92em; }
   .buttons { text-align: right; margin-top: 10px; }
-  .FormButton { width: 80px; margin-left: 6px; }
+  .FormButton { width: 6.7em; margin-left: 6px; }
   input.off { background: #e4e4e4; color: #999; border-color: #ccc; }
-  input.ver { border: 0; background: transparent; color: #888; font-size: 11px; width: 10em; padding: 0; }
+  input.ver { border: 0; background: transparent; color: #888; font-size: 0.79em; width: 10em; padding: 0; }
+  .zoombox { float: left; font-size: 0.92em; }
 </style>
 </head>
 <body>
@@ -67,7 +82,7 @@
   <label><input type="checkbox" id="DimAngle"> <span class="t" data-en="Angles at corners (except 90°)">Winkel an Ecken (ohne 90°)</span></label>
   <table>
     <tr><td><span class="t" data-en="Dim. layer:">Maß-Layer:</span></td>
-      <td><input class="num" style="width:10em; text-align:left" type="text" id="DimLayer">
+      <td><input class="num" style="width:10em; max-width:45%; text-align:left" type="text" id="DimLayer">
       &nbsp;<label><input type="checkbox" id="HideDimLayer" onclick="syncAll()"> <span class="t" data-en="hide">ausblenden</span></label>
       <br><span class="hint t" data-en="Lines on this layer are printed as dimensions · 3 points (V) = angle">Linien auf diesem Layer werden als Maß gedruckt · 3 Punkte (V) = Winkel</span></td></tr>
   </table>
@@ -117,7 +132,7 @@
 
 <div class="buttons">
   <span class="zoombox">
-    <label for="ZoomLevel">Zoom</label>
+    <label for="ZoomLevel" ondblclick="toggleZoomInfo()">Zoom</label>
     <select id="ZoomLevel" onchange="onZoomLevelChanged(this)">
       <option value="Auto">Auto</option>
       <option value="100%">100%</option>
@@ -128,6 +143,7 @@
       <option value="225%">225%</option>
       <option value="250%">250%</option>
     </select>
+    <span id="ZoomInfo"></span>
   </span>
   <input id="ButtonOK" class="FormButton" type="button" value="OK">
   <input id="ButtonCancel" class="FormButton" type="button" value="Abbrechen" data-en="Cancel">
@@ -161,31 +177,96 @@ function syncLang() {
     if (cancel.getAttribute("data-de") == null) cancel.setAttribute("data-de", cancel.value);
     cancel.value = (lang == "2") ? cancel.getAttribute("data-en") : cancel.getAttribute("data-de");
   }
-  if (!first) fitToWindow();          // Textlaengen haben sich geaendert
+  if (!first) applyZoom(true);           // Textlaengen haben sich geaendert
 }
+
+// Grundschrift des Stylesheets. Skaliert wird ausschliesslich dieser Wert:
+// die Texte werden groesser, das Layout bleibt so breit wie das Fenster.
+// (body.style.zoom waere einfacher, vergroessert aber auch die Breiten -- dann
+// liegen Sprachwahl und OK/Abbrechen ausserhalb des Fensters.)
+var BASE_PX = 12;
 
 // Zoomstufe: "Auto" richtet sich nach der Bildschirm-DPI (IE-spezifisch:
-// screen.deviceXDPI), sonst gilt der gewaehlte Prozentwert.
+// screen.deviceXDPI). Ergebnis in Prozent.
 function dpiToZoom() {
   var dpi = screen.deviceXDPI ? screen.deviceXDPI : 96;
-  if (dpi >= 168) { return "200%"; }
-  if (dpi >= 144) { return "150%"; }
-  return "100%";
+  if (dpi >= 168) { return 200; }
+  if (dpi >= 144) { return 150; }
+  return 100;
 }
 
-// Zoom nur setzen, wenn sich die Auswahl geaendert hat (VCarve stellt den
-// gemerkten Wert erst nach dem Laden ein, deshalb laeuft das mit syncAll).
-var shownZoom = "";
-function syncZoom() {
+// Gewaehlte Stufe; "Auto", solange die Liste noch nichts Brauchbares liefert
+// (VCarve stellt den gemerkten Wert erst nach dem Laden ein).
+function selectedZoom() {
   var sel = document.getElementById("ZoomLevel");
-  if (!sel) return;
-  var val = sel.options[sel.selectedIndex].value;
-  if (val == shownZoom) return;
-  shownZoom = val;
-  document.body.style.zoom = (val == "Auto") ? dpiToZoom() : val;
+  if (!sel || sel.selectedIndex < 0) return "Auto";
+  var opt = sel.options[sel.selectedIndex];
+  return opt ? opt.value : "Auto";
 }
 
-function onZoomLevelChanged(sel) { syncZoom(); }
+// Hoehe des Inhalts bei Grundschrift mit dem Fenster vergleichen. 100 = passt
+// (der Rand des body steckt in clientHeight, nicht in scrollHeight), kleiner =
+// zu hoch. Die Breite bleibt aussen vor, die faengt das Layout selbst ab.
+function fitPercent() {
+  var b = document.body, de = document.documentElement;
+  var save = b.style.fontSize;
+  b.style.fontSize = BASE_PX + "px";
+  var availH = de.clientHeight || b.clientHeight;
+  var needH = b.scrollHeight;
+  b.style.fontSize = save;
+  if (!availH || !needH || needH <= availH + 8) return 100;   // 8 px Toleranz
+  return Math.floor(100 * availH / needH);
+}
+
+// Ein ausdruecklich gewaehlter Prozentwert gilt unveraendert (bei Bedarf wird
+// senkrecht gescrollt, das Fenster laesst sich ausserdem vergroessern).
+// "Auto" verkleinert, wenn der Inhalt nicht in die Fensterhoehe passt, und
+// vergroessert sonst nach Bildschirm-DPI.
+// force = true: neu messen (Fenstergroesse oder Textlaengen haben sich geaendert).
+var shownZoom = "";
+function applyZoom(force) {
+  var b = document.body;
+  if (!b) return;
+  var val = selectedZoom();
+  if (!force && val == shownZoom) return;
+  shownZoom = val;
+  var pct;
+  if (val == "Auto") {
+    var fit = fitPercent();
+    pct = (fit < 100) ? fit : dpiToZoom();
+  } else {
+    pct = parseInt(val, 10);
+  }
+  if (!(pct > 0)) pct = 100;
+  if (pct < 85) pct = 85;        // lesbar bleiben; zu hohe Inhalte scrollen
+  var px = Math.round(BASE_PX * pct / 100);   // ganze Pixel, sonst unscharf
+  if (px < 9) px = 9;
+  b.style.fontSize = px + "px";
+  // Beschriftungen moeglichst einzeilig, aber nur wenn alles ins Fenster passt
+  b.className = "nowrapcol";
+  if (b.scrollWidth > b.clientWidth) b.className = "";
+  showZoomInfo(val, pct);
+}
+
+function onZoomLevelChanged(sel) { applyZoom(true); }
+
+// Kleine Anzeige zum Nachsehen, was tatsaechlich angewendet wurde:
+// Doppelklick auf "Zoom" schaltet sie ein und aus.
+var zoomInfoOn = false;
+function toggleZoomInfo() {
+  zoomInfoOn = !zoomInfoOn;
+  applyZoom(true);
+}
+function showZoomInfo(val, pct) {
+  var el = document.getElementById("ZoomInfo");
+  if (!el) return;
+  if (!zoomInfoOn) { el.innerHTML = ""; return; }
+  var b = document.body, de = document.documentElement;
+  el.innerHTML = " dpi " + (screen.deviceXDPI ? screen.deviceXDPI : "?") +
+                 " / " + val + " -> " + pct + "%" +
+                 " / Fenster " + (de.clientWidth || 0) + "x" + (de.clientHeight || 0) +
+                 " / Inhalt " + b.scrollWidth + "x" + b.scrollHeight;
+}
 
 // Maß-Layer-Feld ausgrauen, solange "ausblenden" angekreuzt ist.
 // readOnly statt disabled, damit VCarve den Wert weiterhin lesen kann.
@@ -197,24 +278,14 @@ function syncDimLayer() {
   tf.className = cb.checked ? "num off" : "num";
 }
 
-function syncAll() { syncLang(); syncDimLayer(); syncZoom(); }
+function syncAll() { syncLang(); syncDimLayer(); applyZoom(false); }
 
-// Bei hoher Bildschirm-Skalierung (z. B. 150 %) wird die Schrift groesser, das Fenster aber nicht:
-// Inhalt dann so weit verkleinern, dass alles inkl. OK/Abbrechen ins Fenster passt.
-function fitToWindow() {
-  var b = document.body, de = document.documentElement;
-  if (!b) return;
-  b.style.zoom = 1;
-  var availH = de.clientHeight || b.clientHeight;
-  var availW = de.clientWidth || b.clientWidth;
-  var needH = b.scrollHeight + 24;
-  var needW = b.scrollWidth + 24;
-  if (!availH || !availW || !needH || !needW) return;
-  var z = Math.min(1, availH / needH, availW / needW);
-  if (z < 1) b.style.zoom = Math.max(0.5, Math.floor(z * 100) / 100);
-}
-window.onload = function () { syncAll(); fitToWindow(); setTimeout(fitToWindow, 400); };
-window.onresize = fitToWindow;
+window.onload = function () {
+  syncAll();
+  applyZoom(true);
+  setTimeout(function () { applyZoom(true); }, 400);
+};
+window.onresize = function () { applyZoom(true); };
 
 // VCarve setzt die Werte erst nach dem Laden -> Zustand regelmaessig abgleichen
 setInterval(syncAll, 200);
