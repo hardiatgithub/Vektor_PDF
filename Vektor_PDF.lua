@@ -249,10 +249,72 @@ end
 -- Vektoren einsammeln (inkl. Gruppen)
 -- ------------------------------------------------------------------
 -- in_group: Kontur stammt aus einer Gruppe (z. B. in Kurven umgewandelter Text)
-local function AddObject(obj, contours, in_group)
+-- Seite (Sheet) eines Objekts, falls die API sie liefert (Name je nach Version)
+local sheet_probe = nil          -- welche Eigenschaft funktioniert hat (fuer die Diagnose)
+local sheet_obj_info = nil       -- Klassen-Info eines Objekts, falls keine funktioniert
+local known_sheets = {}          -- Seiten des Jobs { {id=..., key="...", name="..."}, ... }
+local sheet_mgr = nil            -- job.SheetManager (fuer Seitennamen)
+
+-- Beliebigen Wert (auch Vectric-Objekte wie Sheet-Ids) sicher in Text umwandeln
+local function SafeStr(v)
+  local t = type(v)
+  if t == "string" then return v end
+  if t == "number" or t == "boolean" then return tostring(v) end
+  if v == nil then return nil end
+  for _, k in ipairs({ "RawString", "String", "Text", "AsString" }) do
+    local ok, s = pcall(function() return v[k] end)
+    if ok and type(s) == "function" then ok, s = pcall(s, v) end
+    if ok and type(s) == "string" and s ~= "" then return s end
+  end
+  local ok, s = pcall(tostring, v)
+  if ok and type(s) == "string" and not s:match("^userdata") then return s end
+  return nil
+end
+
+-- Seiten-Wert -> einheitlicher Schluessel (Text); vergleicht auch mit den Ids des Jobs
+local function SheetKey(v)
+  if v == nil then return nil end
+  local s = SafeStr(v)
+  if s then return s end
+  -- Vectric-Ids lassen sich nicht in Text wandeln -> ueber den Seitennamen zuordnen
+  if sheet_mgr then
+    local ok, name = pcall(function() return sheet_mgr:GetSheetName(v) end)
+    if ok and type(name) == "string" and name ~= "" then return "n:" .. name end
+  end
+  for _, sh in ipairs(known_sheets) do
+    local ok, eq = pcall(function() return v == sh.id end)
+    if ok and eq then return sh.key end
+  end
+  return "?"
+end
+
+local function ObjSheet(obj)
+  for _, key in ipairs({ "SheetIndex", "SheetId", "Sheet", "GetSheetIndex", "GetSheetId" }) do
+    local ok, v = pcall(function() return obj[key] end)
+    if ok and type(v) == "function" then ok, v = pcall(v, obj) end
+    if ok and v ~= nil and type(v) ~= "function" then
+      sheet_probe = key
+      return SheetKey(v)
+    end
+  end
+  if sheet_obj_info == nil and type(class_info) == "function" then
+    local ok, ci = pcall(class_info, obj)
+    if ok and ci then
+      local m = {}
+      if type(ci.methods) == "table" then for k in pairs(ci.methods) do m[#m + 1] = tostring(k) end end
+      if type(ci.attributes) == "table" then for _, v in pairs(ci.attributes) do m[#m + 1] = tostring(v) end end
+      table.sort(m)
+      sheet_obj_info = tostring(ci.name) .. ": " .. table.concat(m, ", ")
+    end
+  end
+  return nil
+end
+
+local function AddObject(obj, contours, in_group, sheet)
+  if sheet == nil then sheet = ObjSheet(obj) end
   local ok, contour = pcall(function() return obj:GetContour() end)
   if ok and contour ~= nil then
-    contours[#contours + 1] = { contour = contour, in_group = in_group or false }
+    contours[#contours + 1] = { contour = contour, in_group = in_group or false, sheet = sheet }
     return
   end
   local gok, group = pcall(function() return CastCadObjectToCadObjectGroup(obj) end)
@@ -262,7 +324,7 @@ local function AddObject(obj, contours, in_group)
       while pos ~= nil do
         local child
         child, pos = group:GetNext(pos)
-        AddObject(child, contours, true)
+        AddObject(child, contours, true, sheet)
       end
     end)
     if iok then return end
@@ -330,9 +392,9 @@ local function ContoursToDimLines(list)
       local pts = ContourPoints(c.contour)
       if #pts == 3 then
         lines[#lines + 1] = { pts[1][1], pts[1][2], pts[3][1], pts[3][2],
-                              angle = true, vx = pts[2][1], vy = pts[2][2] }
+                              angle = true, vx = pts[2][1], vy = pts[2][2], sheet = c.sheet }
       elseif #pts >= 2 then
-        lines[#lines + 1] = { pts[1][1], pts[1][2], pts[#pts][1], pts[#pts][2] }
+        lines[#lines + 1] = { pts[1][1], pts[1][2], pts[#pts][1], pts[#pts][2], sheet = c.sheet }
       end
     end
   end
@@ -540,15 +602,63 @@ end
 -- ------------------------------------------------------------------
 -- PDF schreiben
 -- ------------------------------------------------------------------
-local function WritePdf(filename, page_w, page_h, stream)
+-- ------------------------------------------------------------------
+-- Seiten (Sheets) des Jobs
+-- ------------------------------------------------------------------
+-- Liste der Sheets { {id=..., name=...}, ... } und die aktive Sheet-Id
+local function JobSheets(job)
+  local list, active = {}, nil
+  pcall(function()
+    local sm = job.SheetManager
+    sheet_mgr = sm
+    active = sm.ActiveSheetId
+    for id in sm:GetSheetIds() do
+      local ok, name = pcall(function() return sm:GetSheetName(id) end)
+      local key = SheetKey(id)
+      if key == "?" then key = "#" .. (#list + 1) end
+      list[#list + 1] = { id = id, key = key, name = (ok and SafeStr(name)) or key }
+    end
+  end)
+  return list, active
+end
+
+-- Schluessel -> Eintrag in der Seiten-Liste (Name fuer die Seite)
+local function SheetForKey(list, key)
+  for _, sh in ipairs(list) do if sh.key == key then return sh end end
+  local n = tonumber(key)                       -- Objekte zaehlen evtl. 0, 1, 2 ...
+  if n and list[n + 1] then return list[n + 1] end
+  return nil
+end
+
+-- Welcher Schluessel gehoert zur aktiven Seite?
+local function ActiveSheetKey(list, active_key, keys)
+  if active_key == nil then return nil end
+  for _, k in ipairs(keys) do if k == active_key then return k end end
+  for pos, sh in ipairs(list) do
+    if sh.key == active_key then
+      for _, k in ipairs(keys) do if k == tostring(pos - 1) then return k end end
+      for _, k in ipairs(keys) do if k == tostring(pos) then return k end end
+    end
+  end
+  return nil
+end
+
+-- pages = { { w = Breite, h = Hoehe, stream = Inhalt }, ... }
+local function WritePdf(filename, pages)
+  local n = #pages
+  local kids = {}
+  for i = 1, n do kids[#kids + 1] = (3 + 2 * i - 1) .. " 0 R" end
   local objs = {
     "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " .. f(page_w) .. " " .. f(page_h) ..
-      "] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-    "<< /Length " .. #stream .. " >>\nstream\n" .. stream .. "\nendstream",
+    "<< /Type /Pages /Kids [" .. table.concat(kids, " ") .. "] /Count " .. n .. " >>",
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
   }
+  for i, pg in ipairs(pages) do
+    local page_obj = 3 + 2 * i - 1
+    objs[page_obj] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " .. f(pg.w) .. " " .. f(pg.h) ..
+      "] /Contents " .. (page_obj + 1) .. " 0 R /Resources << /Font << /F1 3 0 R >> >> >>"
+    objs[page_obj + 1] = "<< /Length " .. #pg.stream .. " >>\nstream\n" .. pg.stream .. "\nendstream"
+  end
   local out = { "%PDF-1.4\n%\226\227\207\211\n" }
   local offset = #out[1]
   local offsets = {}
@@ -584,7 +694,7 @@ function main(script_path)
     return false
   end
 
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 870, "Vektor_PDF " .. VERSION)
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 895, "Vektor_PDF " .. VERSION)
   dialog:AddRadioGroup("Lang", lang)
   dialog:AddTextField("Version", "v" .. VERSION)
   -- Zahlenfelder als Text: Komma und Punkt werden beide akzeptiert
@@ -603,7 +713,9 @@ function main(script_path)
   AddNum("Margin", 10)
   AddNum("FontSize", 3.5)
   dialog:AddRadioGroup("ScaleMode", reg:GetInt("ScaleMode", 1))
+  dialog:AddRadioGroup("Orient", reg:GetInt("Orient", 1))
   dialog:AddRadioGroup("Source", job.Selection.IsEmpty and 2 or 1)
+  dialog:AddRadioGroup("SheetMode", reg:GetInt("SheetMode", 1))
   dialog:AddCheckBox("DrawBorder", reg:GetBool("DrawBorder", false))
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
@@ -647,7 +759,9 @@ function main(script_path)
   local margin_mm   = GetNum("Margin")
   local font_mm     = GetNum("FontSize")
   local scale_mode  = dialog:GetRadioIndex("ScaleMode")      -- 1 = A4, 2 = 1:1
+  local orient      = dialog:GetRadioIndex("Orient")         -- 1 = automatisch, 2 = hoch, 3 = quer
   local selected_only = dialog:GetRadioIndex("Source") == 1
+  local sheet_mode  = dialog:GetRadioIndex("SheetMode")     -- 1 = aktuelle Seite, 2 = alle Seiten
   local draw_border = dialog:GetCheckBox("DrawBorder")
   local dim_overall = dialog:GetCheckBox("DimOverall")
   local dim_each    = dialog:GetCheckBox("DimEach")
@@ -673,6 +787,8 @@ function main(script_path)
   reg:SetDouble("Margin", margin_mm)
   reg:SetDouble("FontSize", font_mm)
   reg:SetInt("ScaleMode", scale_mode)
+  reg:SetInt("Orient", orient)
+  reg:SetInt("SheetMode", sheet_mode)
   reg:SetBool("DrawBorder", draw_border)
   reg:SetBool("DimOverall", dim_overall)
   reg:SetBool("DimEach", dim_each)
@@ -716,217 +832,317 @@ function main(script_path)
   skipped = 0
   bezier_fallback = 0
   bezier_info = nil
+  local sheet_list, active_id = JobSheets(job)
+  known_sheets = sheet_list
+  local active_key = SheetKey(active_id)
   local contours, dim_lines, dim_info = CollectContours(job, selected_only, dim_layer)
   if hide_dims then dim_lines = {} end      -- Hilfslinien bleiben trotzdem aus der Zeichnung
   if #contours == 0 then
     DisplayMessageBox(T("Keine Vektoren gefunden.", "No vectors found."))
     return false
   end
-  local paths = {}
-  local minx, miny, maxx, maxy = math.huge, math.huge, -math.huge, -math.huge
-  for _, c in ipairs(contours) do
-    local p = ContourToPath(c.contour, seg_len)
-    p.in_group = c.in_group
-    paths[#paths + 1] = p
-    minx = math.min(minx, p.minx); miny = math.min(miny, p.miny)
-    maxx = math.max(maxx, p.maxx); maxy = math.max(maxy, p.maxy)
-  end
-  local vminx, vminy, vmaxx, vmaxy = minx, miny, maxx, maxy   -- nur Vektoren
-  for _, l in ipairs(dim_lines) do                              -- Platz fuer manuelle Masse
-    minx = math.min(minx, l[1], l[3]); miny = math.min(miny, l[2], l[4])
-    maxx = math.max(maxx, l[1], l[3]); maxy = math.max(maxy, l[2], l[4])
-    if l.angle then
-      minx = math.min(minx, l.vx); miny = math.min(miny, l.vy)
-      maxx = math.max(maxx, l.vx); maxy = math.max(maxy, l.vy)
+  -- Eine PDF-Seite aus Konturen, Hilfslinien und Titel erzeugen
+  local function RenderPage(contours, dim_lines, title)
+    local paths = {}
+    local minx, miny, maxx, maxy = math.huge, math.huge, -math.huge, -math.huge
+    for _, c in ipairs(contours) do
+      local p = ContourToPath(c.contour, seg_len)
+      p.in_group = c.in_group
+      paths[#paths + 1] = p
+      minx = math.min(minx, p.minx); miny = math.min(miny, p.miny)
+      maxx = math.max(maxx, p.maxx); maxy = math.max(maxy, p.maxy)
     end
+    local vminx, vminy, vmaxx, vmaxy = minx, miny, maxx, maxy   -- nur Vektoren
+    for _, l in ipairs(dim_lines) do                              -- Platz fuer manuelle Masse
+      minx = math.min(minx, l[1], l[3]); miny = math.min(miny, l[2], l[4])
+      maxx = math.max(maxx, l[1], l[3]); maxy = math.max(maxy, l[2], l[4])
+      if l.angle then
+        minx = math.min(minx, l.vx); miny = math.min(miny, l.vy)
+        maxx = math.max(maxx, l.vx); maxy = math.max(maxy, l.vy)
+      end
+    end
+
+    local border = nil
+    if draw_border then
+      local mok, mb = pcall(MaterialBlock)
+      if not mok or mb == nil then
+        DisplayMessageBox(T("Materialumriss konnte nicht gelesen werden.", "Could not read the material outline."))
+        return false
+      end
+      local box = mb.MaterialBox
+      border = { box.MinX, box.MinY, box.MaxX, box.MaxY }
+      minx = math.min(minx, box.MinX); miny = math.min(miny, box.MinY)
+      maxx = math.max(maxx, box.MaxX); maxy = math.max(maxy, box.MaxY)
+    end
+    local w, h = math.max(maxx - minx, 1e-9), math.max(maxy - miny, 1e-9)
+
+    -- Platz fuer Bemassung und Titel reservieren
+    local fs     = font_mm * MM
+    local margin = margin_mm * MM
+    local dim_res = (dim_overall or dim_each) and (8 * MM + 2 * fs) or 0
+    local lines = 0
+    if title ~= "" then lines = lines + 1.4 end
+    if note  ~= "" then lines = lines + 1 end
+    local title_res = lines > 0 and (lines * fs * 1.5 + 3 * MM) or 0
+    local foot_res  = show_scale and (fs * 1.5) or 0
+
+    local page_w, page_h, scale
+    if scale_mode == 2 then
+      scale  = unit_pt
+      page_w = w * scale + 2 * margin + dim_res
+      page_h = h * scale + 2 * margin + dim_res + title_res + foot_res
+    else
+      page_w, page_h = 595.28, 841.89
+      local landscape = (orient == 3) or (orient ~= 2 and w > h)
+      if landscape then page_w, page_h = page_h, page_w end
+      scale = math.min((page_w - 2 * margin - dim_res) / w,
+                       (page_h - 2 * margin - dim_res - title_res - foot_res) / h)
+    end
+    local area_x = margin + dim_res
+    local area_y = margin + dim_res + foot_res
+    local area_w = page_w - margin - area_x
+    local area_h = page_h - margin - title_res - area_y
+    local offx = area_x + (area_w - w * scale) / 2
+    local offy = area_y + (area_h - h * scale) / 2
+    local function tx(x) return offx + (x - minx) * scale end
+    local function ty(y) return offy + (y - miny) * scale end
+
+    -- 1) Zeichnung
+    local s = { f(line_mm * MM) .. " w 1 J 1 j " .. ColorOps(vec_color) }
+    for _, p in ipairs(paths) do
+      for _, cmd in ipairs(p.cmds) do
+        local k = cmd[1]
+        if k == "m" or k == "l" then
+          s[#s + 1] = f(tx(cmd[2])) .. " " .. f(ty(cmd[3])) .. " " .. k
+        elseif k == "c" then
+          s[#s + 1] = f(tx(cmd[2])) .. " " .. f(ty(cmd[3])) .. " " ..
+                      f(tx(cmd[4])) .. " " .. f(ty(cmd[5])) .. " " ..
+                      f(tx(cmd[6])) .. " " .. f(ty(cmd[7])) .. " c"
+        else
+          s[#s + 1] = "h"
+        end
+      end
+      s[#s + 1] = "S"
+    end
+    if border then
+      s[#s + 1] = "q 0.3 w 0.6 G " .. f(tx(border[1])) .. " " .. f(ty(border[2])) .. " " ..
+        f((border[3] - border[1]) * scale) .. " " .. f((border[4] - border[2]) * scale) .. " re S Q"
+    end
+
+    -- 2) Bemassung
+    if not dim_line_mm or dim_line_mm <= 0 then dim_line_mm = 0.25 end
+    local d = Draw.new(fs, dim_line_mm * MM)
+    if arrow_mm and arrow_mm > 0 then d.arrow = arrow_mm * MM end
+    d:add("q " .. f(dim_line_mm * MM) .. " w " .. ColorOps(dim_color))
+    local near = 5 * MM          -- Abstand Einzelmasse
+    local far  = near + 2 * fs + 3 * MM  -- Abstand Gesamtmasse
+    if dim_overall then
+      d:hdim(tx(vminx), tx(vmaxx), ty(vminy), ty(vminy) - far, fmt(vmaxx - vminx))
+      d:vdim(ty(vminy), ty(vmaxy), tx(vminx), tx(vminx) - far, fmt(vmaxy - vminy))
+    end
+    if dim_each then
+      local tol = in_mm and 0.05 or 0.002
+      local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4   -- Eingabe immer in mm
+      for _, p in ipairs(paths) do
+        local pw, ph = p.maxx - p.minx, p.maxy - p.miny
+        local is_total = math.abs(p.minx - vminx) < tol and math.abs(p.maxx - vmaxx) < tol and
+                         math.abs(p.miny - vminy) < tol and math.abs(p.maxy - vmaxy) < tol
+        local big_enough = math.max(pw, ph) >= min_dim
+        if p.closed and not p.in_group and big_enough and pw > tol and ph > tol and
+           not (is_total and dim_overall) then
+          if p.all_arcs and math.abs(pw - ph) < 0.01 * pw then
+            -- Kreis: Durchmesser ueber dem Kreis
+            d:text(tx((p.minx + p.maxx) / 2), ty(p.maxy) + 1.5 * MM, "\195\152 " .. fmt(pw))
+          else
+            local same_w = dim_overall and math.abs(p.minx - vminx) < tol and math.abs(p.maxx - vmaxx) < tol
+            local same_h = dim_overall and math.abs(p.miny - vminy) < tol and math.abs(p.maxy - vmaxy) < tol
+            if not same_w then d:hdim(tx(p.minx), tx(p.maxx), ty(p.miny), ty(p.miny) - near, fmt(pw)) end
+            if not same_h then d:vdim(ty(p.miny), ty(p.maxy), tx(p.minx), tx(p.minx) - near, fmt(ph)) end
+          end
+        end
+      end
+    end
+
+    -- Radien an Boegen (gleiche Radien je Vektor nur einmal)
+    if dim_radius then
+      local tol = in_mm and 0.05 or 0.002
+      local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4
+      for _, p in ipairs(paths) do
+        local pw, ph = p.maxx - p.minx, p.maxy - p.miny
+        local is_circle = p.closed and p.all_arcs and pw > tol and math.abs(pw - ph) < 0.01 * pw
+        if not p.in_group and math.max(pw, ph) >= min_dim and not (is_circle and dim_each) then
+          local done = {}
+          for _, a in ipairs(p.arcs) do
+            local seen = false
+            for _, r in ipairs(done) do if math.abs(r - a.r) < tol then seen = true end end
+            if not seen and a.r > tol then
+              done[#done + 1] = a.r
+              d:radius(tx(a.cx), ty(a.cy), tx(a.px), ty(a.py), "R " .. fmt(a.r))
+            end
+          end
+        end
+      end
+    end
+
+    -- Winkel an Ecken zwischen zwei Geraden (90 und 180 Grad werden ausgelassen)
+    if dim_angle then
+      local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4
+      for _, p in ipairs(paths) do
+        local pw, ph = p.maxx - p.minx, p.maxy - p.miny
+        if not p.in_group and math.max(pw, ph) >= min_dim then
+          for _, cn in ipairs(PathCorners(p)) do
+            local deg = cn[7]
+            if math.abs(deg - 90) > 0.5 and deg > 0.5 and deg < 179.5 then
+              d:angleDim(tx(cn[1]), ty(cn[2]), tx(cn[3]), ty(cn[4]), tx(cn[5]), ty(cn[6]), fmtAng(deg))
+            end
+          end
+        end
+      end
+    end
+
+    -- Manuelle Masse aus den Hilfslinien des Bemassungs-Layers
+    for _, l in ipairs(dim_lines) do
+      if l.angle then
+        local a1 = atan2(l[2] - l.vy, l[1] - l.vx)
+        local sw = atan2(l[4] - l.vy, l[3] - l.vx) - a1
+        while sw > math.pi do sw = sw - 2 * math.pi end
+        while sw <= -math.pi do sw = sw + 2 * math.pi end
+        d:angleDim(tx(l.vx), ty(l.vy), tx(l[1]), ty(l[2]), tx(l[3]), ty(l[4]),
+                   fmtAng(math.abs(sw) * 180 / math.pi))
+      else
+        local len = math.sqrt((l[3] - l[1]) ^ 2 + (l[4] - l[2]) ^ 2)
+        d:alignedDim(tx(l[1]), ty(l[2]), tx(l[3]), ty(l[4]), (fmt(len)))
+      end
+    end
+
+    -- 3) Titel, Notiz, Massstab (immer schwarz)
+    d:add("0 G 0 g")
+    local ytop = page_h - margin
+    if title ~= "" then
+      ytop = ytop - fs * 1.4
+      d:text(margin, ytop, title, fs * 1.4, false, "left")
+    end
+    if note ~= "" then
+      ytop = ytop - fs * 1.5
+      d:text(margin, ytop, note, fs, false, "left")
+    end
+    if show_scale then
+      local ratio = unit_pt / scale
+      local r
+      if math.abs(ratio - 1) < 0.005 then r = "1:1"
+      elseif ratio > 1 then r = "1:" .. string.format("%.2f", ratio):gsub("%.?0+$", "")
+      else r = string.format("%.2f", 1 / ratio):gsub("%.?0+$", "") .. ":1" end
+      local unit = in_mm and "mm" or T("Zoll", "inch")
+      local sep = "   \194\183   "
+      local foot = T("Ma\195\159stab ", "Scale ") .. r .. sep ..
+                   T("Ma\195\159e in ", "Dimensions in ") .. unit .. sep ..
+                   os.date(T("%d.%m.%Y", "%Y-%m-%d"))
+      d:text(margin, margin, foot, fs * 0.8, false, "left")
+    end
+    d:add("Q")
+
+    local stream = table.concat(s, "\n") .. "\n" .. table.concat(d.s, "\n")
+    return { w = page_w, h = page_h, stream = stream }, paths
   end
 
-  local border = nil
-  if draw_border then
-    local mok, mb = pcall(MaterialBlock)
-    if not mok or mb == nil then
-      DisplayMessageBox(T("Materialumriss konnte nicht gelesen werden.", "Could not read the material outline."))
+  -- Seiten (Sheets) aufteilen
+  local keys, seen = {}, {}
+  for _, c in ipairs(contours) do
+    local k = c.sheet
+    if k ~= nil and not seen[k] then seen[k] = true; keys[#keys + 1] = k end
+  end
+  local sheet_method = sheet_probe and ("Objekt." .. sheet_probe) or nil
+  -- Objekte liefern keine Seite: probeweise jede Seite aktivieren und neu einlesen
+  if not selected_only and #keys <= 1 and #sheet_list > 1 then
+    local per, total = {}, #contours
+    local differs = false
+    for _, sh in ipairs(sheet_list) do
+      local okset = pcall(function() job.SheetManager.ActiveSheetId = sh.id end)
+      if okset then
+        local c2, d2 = CollectContours(job, false, dim_layer)
+        per[#per + 1] = { sh = sh, contours = c2, dims = d2 }
+        if #c2 ~= total then differs = true end
+      end
+    end
+    pcall(function() job.SheetManager.ActiveSheetId = active_id end)
+    if differs then
+      contours, dim_lines, keys, seen = {}, {}, {}, {}
+      for _, e in ipairs(per) do
+        for _, c in ipairs(e.contours) do c.sheet = e.sh.key; contours[#contours + 1] = c end
+        for _, l in ipairs(e.dims) do l.sheet = e.sh.key; dim_lines[#dim_lines + 1] = l end
+        if #e.contours > 0 then seen[e.sh.key] = true; keys[#keys + 1] = e.sh.key end
+      end
+      if hide_dims then dim_lines = {} end
+      sheet_method = "ActiveSheetId"
+    end
+  end
+  -- Diagnose, falls der Job mehrere Seiten hat, sie aber nicht getrennt werden konnten
+  local sheet_diag = nil
+  if not selected_only and (#sheet_list > 1 or sheet_mode == 2) and #keys <= 1 then
+    local ids = {}
+    for _, sh in ipairs(sheet_list) do ids[#ids + 1] = tostring(sh.key) .. "=" .. tostring(sh.name) end
+    sheet_diag = T("\n\n--- Seiten-Diagnose (bitte Screenshot senden) ---\n",
+                   "\n\n--- Sheet diagnostics (please send a screenshot) ---\n") ..
+                 #sheet_list .. T(" Seiten: ", " sheets: ") .. table.concat(ids, ", ") ..
+                 T("\naktiv: ", "\nactive: ") .. tostring(active_key) ..
+                 T("\nSeite je Objekt: ", "\nsheet per object: ") .. tostring(sheet_method) ..
+                 (keys[1] ~= nil and (" (" .. tostring(keys[1]) .. ")") or "") ..
+                 (sheet_obj_info and ("\n" .. sheet_obj_info) or "")
+  end
+  table.sort(keys, function(a, b)
+    local na, nb = tonumber(a), tonumber(b)
+    if na and nb then return na < nb end
+    return tostring(a) < tostring(b)
+  end)
+  local sheet_note = nil
+  local groups = {}
+  if selected_only or #keys <= 1 then
+    groups[1] = { contours = contours, dims = dim_lines, title = title }
+  elseif sheet_mode == 2 then
+    for n, k in ipairs(keys) do
+      local g = { contours = {}, dims = {} }
+      for _, c in ipairs(contours) do if c.sheet == k then g.contours[#g.contours + 1] = c end end
+      for _, l in ipairs(dim_lines) do if l.sheet == k then g.dims[#g.dims + 1] = l end end
+      local sh = SheetForKey(sheet_list, k)
+      local sname = sh and sh.name or (T("Seite ", "Sheet ") .. n)
+      g.title = (title ~= "") and (title .. " - " .. sname) or sname
+      groups[#groups + 1] = g
+    end
+  else
+    local ak = ActiveSheetKey(sheet_list, active_key, keys)
+    if ak == nil then
+      ak = keys[1]
+      sheet_note = T("aktive Seite nicht erkannt - erste Seite exportiert",
+                     "active sheet not detected - first sheet exported")
+    end
+    local g = { contours = {}, dims = {}, title = title }
+    for _, c in ipairs(contours) do if c.sheet == ak then g.contours[#g.contours + 1] = c end end
+    for _, l in ipairs(dim_lines) do if l.sheet == ak then g.dims[#g.dims + 1] = l end end
+    if #g.contours == 0 then
+      DisplayMessageBox(T("Auf der aktiven Seite wurden keine Vektoren gefunden.",
+                          "No vectors found on the active sheet."))
       return false
     end
-    local box = mb.MaterialBox
-    border = { box.MinX, box.MinY, box.MaxX, box.MaxY }
-    minx = math.min(minx, box.MinX); miny = math.min(miny, box.MinY)
-    maxx = math.max(maxx, box.MaxX); maxy = math.max(maxy, box.MaxY)
-  end
-  local w, h = math.max(maxx - minx, 1e-9), math.max(maxy - miny, 1e-9)
-
-  -- Platz fuer Bemassung und Titel reservieren
-  local fs     = font_mm * MM
-  local margin = margin_mm * MM
-  local dim_res = (dim_overall or dim_each) and (8 * MM + 2 * fs) or 0
-  local lines = 0
-  if title ~= "" then lines = lines + 1.4 end
-  if note  ~= "" then lines = lines + 1 end
-  local title_res = lines > 0 and (lines * fs * 1.5 + 3 * MM) or 0
-  local foot_res  = show_scale and (fs * 1.5) or 0
-
-  local page_w, page_h, scale
-  if scale_mode == 2 then
-    scale  = unit_pt
-    page_w = w * scale + 2 * margin + dim_res
-    page_h = h * scale + 2 * margin + dim_res + title_res + foot_res
-  else
-    page_w, page_h = 595.28, 841.89
-    if w > h then page_w, page_h = page_h, page_w end
-    scale = math.min((page_w - 2 * margin - dim_res) / w,
-                     (page_h - 2 * margin - dim_res - title_res - foot_res) / h)
-  end
-  local area_x = margin + dim_res
-  local area_y = margin + dim_res + foot_res
-  local area_w = page_w - margin - area_x
-  local area_h = page_h - margin - title_res - area_y
-  local offx = area_x + (area_w - w * scale) / 2
-  local offy = area_y + (area_h - h * scale) / 2
-  local function tx(x) return offx + (x - minx) * scale end
-  local function ty(y) return offy + (y - miny) * scale end
-
-  -- 1) Zeichnung
-  local s = { f(line_mm * MM) .. " w 1 J 1 j " .. ColorOps(vec_color) }
-  for _, p in ipairs(paths) do
-    for _, cmd in ipairs(p.cmds) do
-      local k = cmd[1]
-      if k == "m" or k == "l" then
-        s[#s + 1] = f(tx(cmd[2])) .. " " .. f(ty(cmd[3])) .. " " .. k
-      elseif k == "c" then
-        s[#s + 1] = f(tx(cmd[2])) .. " " .. f(ty(cmd[3])) .. " " ..
-                    f(tx(cmd[4])) .. " " .. f(ty(cmd[5])) .. " " ..
-                    f(tx(cmd[6])) .. " " .. f(ty(cmd[7])) .. " c"
-      else
-        s[#s + 1] = "h"
-      end
-    end
-    s[#s + 1] = "S"
-  end
-  if border then
-    s[#s + 1] = "q 0.3 w 0.6 G " .. f(tx(border[1])) .. " " .. f(ty(border[2])) .. " " ..
-      f((border[3] - border[1]) * scale) .. " " .. f((border[4] - border[2]) * scale) .. " re S Q"
+    groups[1] = g
+    local sh = SheetForKey(sheet_list, ak)
+    sheet_note = sheet_note or (T("Seite: ", "Sheet: ") .. (sh and sh.name or tostring(ak)))
+    dim_lines = g.dims
   end
 
-  -- 2) Bemassung
-  if not dim_line_mm or dim_line_mm <= 0 then dim_line_mm = 0.25 end
-  local d = Draw.new(fs, dim_line_mm * MM)
-  if arrow_mm and arrow_mm > 0 then d.arrow = arrow_mm * MM end
-  d:add("q " .. f(dim_line_mm * MM) .. " w " .. ColorOps(dim_color))
-  local near = 5 * MM          -- Abstand Einzelmasse
-  local far  = near + 2 * fs + 3 * MM  -- Abstand Gesamtmasse
-  if dim_overall then
-    d:hdim(tx(vminx), tx(vmaxx), ty(vminy), ty(vminy) - far, fmt(vmaxx - vminx))
-    d:vdim(ty(vminy), ty(vmaxy), tx(vminx), tx(vminx) - far, fmt(vmaxy - vminy))
+  local pages, paths = {}, {}
+  for _, g in ipairs(groups) do
+    local pg, pp = RenderPage(g.contours, g.dims, g.title)
+    if not pg then return false end
+    pages[#pages + 1] = pg
+    for _, p in ipairs(pp) do paths[#paths + 1] = p end
   end
-  if dim_each then
-    local tol = in_mm and 0.05 or 0.002
-    local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4   -- Eingabe immer in mm
-    for _, p in ipairs(paths) do
-      local pw, ph = p.maxx - p.minx, p.maxy - p.miny
-      local is_total = math.abs(p.minx - vminx) < tol and math.abs(p.maxx - vmaxx) < tol and
-                       math.abs(p.miny - vminy) < tol and math.abs(p.maxy - vmaxy) < tol
-      local big_enough = math.max(pw, ph) >= min_dim
-      if p.closed and not p.in_group and big_enough and pw > tol and ph > tol and
-         not (is_total and dim_overall) then
-        if p.all_arcs and math.abs(pw - ph) < 0.01 * pw then
-          -- Kreis: Durchmesser ueber dem Kreis
-          d:text(tx((p.minx + p.maxx) / 2), ty(p.maxy) + 1.5 * MM, "\195\152 " .. fmt(pw))
-        else
-          local same_w = dim_overall and math.abs(p.minx - vminx) < tol and math.abs(p.maxx - vmaxx) < tol
-          local same_h = dim_overall and math.abs(p.miny - vminy) < tol and math.abs(p.maxy - vmaxy) < tol
-          if not same_w then d:hdim(tx(p.minx), tx(p.maxx), ty(p.miny), ty(p.miny) - near, fmt(pw)) end
-          if not same_h then d:vdim(ty(p.miny), ty(p.maxy), tx(p.minx), tx(p.minx) - near, fmt(ph)) end
-        end
-      end
-    end
-  end
-
-  -- Radien an Boegen (gleiche Radien je Vektor nur einmal)
-  if dim_radius then
-    local tol = in_mm and 0.05 or 0.002
-    local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4
-    for _, p in ipairs(paths) do
-      local pw, ph = p.maxx - p.minx, p.maxy - p.miny
-      local is_circle = p.closed and p.all_arcs and pw > tol and math.abs(pw - ph) < 0.01 * pw
-      if not p.in_group and math.max(pw, ph) >= min_dim and not (is_circle and dim_each) then
-        local done = {}
-        for _, a in ipairs(p.arcs) do
-          local seen = false
-          for _, r in ipairs(done) do if math.abs(r - a.r) < tol then seen = true end end
-          if not seen and a.r > tol then
-            done[#done + 1] = a.r
-            d:radius(tx(a.cx), ty(a.cy), tx(a.px), ty(a.py), "R " .. fmt(a.r))
-          end
-        end
-      end
-    end
-  end
-
-  -- Winkel an Ecken zwischen zwei Geraden (90 und 180 Grad werden ausgelassen)
-  if dim_angle then
-    local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4
-    for _, p in ipairs(paths) do
-      local pw, ph = p.maxx - p.minx, p.maxy - p.miny
-      if not p.in_group and math.max(pw, ph) >= min_dim then
-        for _, cn in ipairs(PathCorners(p)) do
-          local deg = cn[7]
-          if math.abs(deg - 90) > 0.5 and deg > 0.5 and deg < 179.5 then
-            d:angleDim(tx(cn[1]), ty(cn[2]), tx(cn[3]), ty(cn[4]), tx(cn[5]), ty(cn[6]), fmtAng(deg))
-          end
-        end
-      end
-    end
-  end
-
-  -- Manuelle Masse aus den Hilfslinien des Bemassungs-Layers
-  for _, l in ipairs(dim_lines) do
-    if l.angle then
-      local a1 = atan2(l[2] - l.vy, l[1] - l.vx)
-      local sw = atan2(l[4] - l.vy, l[3] - l.vx) - a1
-      while sw > math.pi do sw = sw - 2 * math.pi end
-      while sw <= -math.pi do sw = sw + 2 * math.pi end
-      d:angleDim(tx(l.vx), ty(l.vy), tx(l[1]), ty(l[2]), tx(l[3]), ty(l[4]),
-                 fmtAng(math.abs(sw) * 180 / math.pi))
-    else
-      local len = math.sqrt((l[3] - l[1]) ^ 2 + (l[4] - l[2]) ^ 2)
-      d:alignedDim(tx(l[1]), ty(l[2]), tx(l[3]), ty(l[4]), (fmt(len)))
-    end
-  end
-
-  -- 3) Titel, Notiz, Massstab (immer schwarz)
-  d:add("0 G 0 g")
-  local ytop = page_h - margin
-  if title ~= "" then
-    ytop = ytop - fs * 1.4
-    d:text(margin, ytop, title, fs * 1.4, false, "left")
-  end
-  if note ~= "" then
-    ytop = ytop - fs * 1.5
-    d:text(margin, ytop, note, fs, false, "left")
-  end
-  if show_scale then
-    local ratio = unit_pt / scale
-    local r
-    if math.abs(ratio - 1) < 0.005 then r = "1:1"
-    elseif ratio > 1 then r = "1:" .. string.format("%.2f", ratio):gsub("%.?0+$", "")
-    else r = string.format("%.2f", 1 / ratio):gsub("%.?0+$", "") .. ":1" end
-    local unit = in_mm and "mm" or T("Zoll", "inch")
-    local sep = "   \194\183   "
-    local foot = T("Ma\195\159stab ", "Scale ") .. r .. sep ..
-                 T("Ma\195\159e in ", "Dimensions in ") .. unit .. sep ..
-                 os.date(T("%d.%m.%Y", "%Y-%m-%d"))
-    d:text(margin, margin, foot, fs * 0.8, false, "left")
-  end
-  d:add("Q")
-
-  local stream = table.concat(s, "\n") .. "\n" .. table.concat(d.s, "\n")
 
   -- Speichern
   local fd = FileDialog()
   if not fd:FileSave("pdf", T("Zeichnung.pdf", "Drawing.pdf"), T("PDF Dateien", "PDF files") .. " (*.pdf)|*.pdf|") then
     return false
   end
-  local ok, err = WritePdf(fd.PathName, page_w, page_h, stream)
+  local ok, err = WritePdf(fd.PathName, pages)
   if not ok then
     DisplayMessageBox(T("PDF konnte nicht geschrieben werden:\n", "Could not write PDF:\n") .. tostring(err))
     return false
@@ -935,6 +1151,12 @@ function main(script_path)
   local msg = "Vektor_PDF v" .. VERSION .. "\n\n" ..
               T("PDF gespeichert:\n", "PDF saved:\n") .. fd.PathName ..
               "\n\n" .. #paths .. T(" Vektoren, Linienstaerke ", " vectors, line width ") .. NumStr(line_mm) .. " mm"
+  if #pages > 1 then
+    msg = msg .. "\n" .. #pages .. T(" Seiten (je VCarve-Seite eine PDF-Seite)", " pages (one PDF page per VCarve sheet)")
+  elseif sheet_note then
+    msg = msg .. "\n" .. sheet_note
+  end
+  if sheet_diag then msg = msg .. sheet_diag end
   local n_group = 0
   for _, p in ipairs(paths) do if p.in_group then n_group = n_group + 1 end end
   if #dim_lines > 0 then

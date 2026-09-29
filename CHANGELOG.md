@@ -5,6 +5,17 @@ Neueste Version steht oben.
 
 ## [Unveröffentlicht]
 
+### Behoben
+- Bei Jobs mit **mehreren Seiten (Sheets)** lagen alle Teile im PDF übereinander. Die Seiten werden jetzt
+  über ihren Namen erkannt (die Seiten-Kennungen von VCarve V12.5 sind interne Objekte).
+
+### Neu
+- Auswahl **„Seiten: Aktuelle Seite / Alle Seiten“** im Dialog. „Alle Seiten“ erzeugt ein **mehrseitiges PDF**
+  mit je einer PDF-Seite pro VCarve-Seite; der Seitenname steht im Titel. Bei „Nur ausgewählte“ wird
+  wie bisher die Auswahl exportiert.
+- **A4-Ausrichtung** wählbar: Automatisch (je Seite passend), Hochformat oder Querformat –
+  damit alle Seiten eines mehrseitigen PDFs gleich ausgerichtet werden können.
+
 ## [1.3.2] – 2026-09-28
 
 ### Neu
