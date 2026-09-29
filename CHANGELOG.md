@@ -15,6 +15,9 @@ Neueste Version steht oben.
   wie bisher die Auswahl exportiert.
 - **A4-Ausrichtung** wählbar: Automatisch (je Seite passend), Hochformat oder Querformat –
   damit alle Seiten eines mehrseitigen PDFs gleich ausgerichtet werden können.
+- **Dialoggröße und Zoom** werden gemerkt: Das Fenster öffnet sich wieder so groß wie beim letzten Mal
+  (auch nach „Abbrechen“), und die neue Auswahl **Zoom** unten links skaliert den Dialoginhalt.
+  „Auto“ richtet sich nach der Bildschirm-DPI, sonst ist ein fester Wert von 100 % bis 250 % wählbar.
 
 ## [1.3.2] – 2026-09-28
 

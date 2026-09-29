@@ -4,19 +4,23 @@
 <meta charset="utf-8">
 <title>PDF Export</title>
 <style>
-  body { font-family: Arial, sans-serif; font-size: 12px; background: #f0f0f0; margin: 12px; }
-  h2 { font-size: 14px; margin: 0 0 10px 0; }
+  body { font-family: Arial, sans-serif; font-size: 14px; background: #f0f0f0; margin: 12px; }
+  h2 { font-size: 16px; margin: 0 0 10px 0; }
   .lang { float: right; font-size: 11px; font-weight: normal; }
   fieldset { border: 1px solid #bbb; margin-bottom: 8px; padding: 6px 8px; }
   legend { font-weight: bold; }
   td { padding: 2px 4px; }
   input.num { width: 60px; text-align: right; }
   input.txt { width: 330px; }
+  /* Textgroesse in Eingabefeldern und Buttons (100 % = wie der uebrige Dialogtext) */
+  input.num, input.txt, .FormButton { font-size: 100%; }
   .hint { color: #666; font-size: 11px; }
   .buttons { text-align: right; margin-top: 10px; }
   .FormButton { width: 80px; margin-left: 6px; }
   input.off { background: #e4e4e4; color: #999; border-color: #ccc; }
   input.ver { border: 0; background: transparent; color: #888; font-size: 11px; width: 60px; padding: 0; }
+  .zoombox { float: left; font-size: 11px; }
+  .zoombox select { font-size: 11px; }
 </style>
 </head>
 <body>
@@ -110,6 +114,19 @@
 </fieldset>
 
 <div class="buttons">
+  <span class="zoombox">
+    <label for="ZoomLevel">Zoom</label>
+    <select id="ZoomLevel" onchange="onZoomLevelChanged(this)">
+      <option value="Auto">Auto</option>
+      <option value="100%">100%</option>
+      <option value="125%">125%</option>
+      <option value="150%">150%</option>
+      <option value="175%">175%</option>
+      <option value="200%">200%</option>
+      <option value="225%">225%</option>
+      <option value="250%">250%</option>
+    </select>
+  </span>
   <input id="ButtonOK" class="FormButton" type="button" value="OK">
   <input id="ButtonCancel" class="FormButton" type="button" value="Abbrechen" data-en="Cancel">
 </div>
@@ -143,6 +160,29 @@ function syncLang() {
   }
 }
 
+// Zoomstufe: "Auto" richtet sich nach der Bildschirm-DPI (IE-spezifisch:
+// screen.deviceXDPI), sonst gilt der gewaehlte Prozentwert.
+function dpiToZoom() {
+  var dpi = screen.deviceXDPI ? screen.deviceXDPI : 96;
+  if (dpi >= 168) { return "200%"; }
+  if (dpi >= 144) { return "150%"; }
+  return "100%";
+}
+
+// Zoom nur setzen, wenn sich die Auswahl geaendert hat (VCarve stellt den
+// gemerkten Wert erst nach dem Laden ein, deshalb laeuft das mit syncAll).
+var shownZoom = "";
+function syncZoom() {
+  var sel = document.getElementById("ZoomLevel");
+  if (!sel) return;
+  var val = sel.options[sel.selectedIndex].value;
+  if (val == shownZoom) return;
+  shownZoom = val;
+  document.body.style.zoom = (val == "Auto") ? dpiToZoom() : val;
+}
+
+function onZoomLevelChanged(sel) { syncZoom(); }
+
 // Maß-Layer-Feld ausgrauen, solange "ausblenden" angekreuzt ist.
 // readOnly statt disabled, damit VCarve den Wert weiterhin lesen kann.
 function syncDimLayer() {
@@ -153,7 +193,7 @@ function syncDimLayer() {
   tf.className = cb.checked ? "num off" : "num";
 }
 
-function syncAll() { syncLang(); syncDimLayer(); }
+function syncAll() { syncLang(); syncDimLayer(); syncZoom(); }
 
 // VCarve setzt die Werte erst nach dem Laden -> Zustand regelmaessig abgleichen
 setInterval(syncAll, 200);

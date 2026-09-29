@@ -683,6 +683,24 @@ local function WritePdf(filename, pages)
 end
 
 -- ------------------------------------------------------------------
+-- Fenstergroesse und Zoomstufe merken, damit der Dialog beim naechsten
+-- Start wieder so gross und so skaliert aufgeht wie zuletzt. Wird auch
+-- bei "Abbrechen" gespeichert, sonst geht die Groesse wieder verloren.
+-- ------------------------------------------------------------------
+local WIN_W_DEFAULT = 520
+local WIN_H_DEFAULT = 870
+
+local function SaveWindowState(reg, dialog)
+  if dialog.WindowWidth ~= nil and dialog.WindowWidth > 0 then
+    reg:SetDouble("WindowWidth", dialog.WindowWidth)
+  end
+  if dialog.WindowHeight ~= nil and dialog.WindowHeight > 0 then
+    reg:SetDouble("WindowHeight", dialog.WindowHeight)
+  end
+  reg:SetString("ZoomLevel", dialog:GetDropDownListValue("ZoomLevel") or "Auto")
+end
+
+-- ------------------------------------------------------------------
 -- Hauptprogramm
 -- ------------------------------------------------------------------
 function main(script_path)
@@ -696,9 +714,17 @@ function main(script_path)
     return false
   end
 
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF_".. G_version.. ".htm", 520, 870, string.format("%s - Version %s %s", G_title, G_version, G_subVersion))
+  -- Zuletzt benutzte Fenstergroesse wiederherstellen (Standard, falls noch nichts
+  -- gemerkt wurde oder ein unbrauchbar kleiner Wert in der Registry steht)
+  local win_w = reg:GetDouble("WindowWidth", WIN_W_DEFAULT)
+  local win_h = reg:GetDouble("WindowHeight", WIN_H_DEFAULT)
+  if win_w < 300 then win_w = WIN_W_DEFAULT end
+  if win_h < 300 then win_h = WIN_H_DEFAULT end
+
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF_".. G_version.. ".htm", win_w, win_h, string.format("%s - Version %s %s", G_title, G_version, G_subVersion))
   dialog:AddRadioGroup("Lang", lang)
   dialog:AddTextField("Version", "v" .. G_version)
+  dialog:AddDropDownList("ZoomLevel", reg:GetString("ZoomLevel", "Auto"))
   -- Zahlenfelder als Text: Komma und Punkt werden beide akzeptiert
   local function NumStr(v)                            -- Anzeige passend zur Sprache
     local str = string.format("%.3f", v)
@@ -731,7 +757,9 @@ function main(script_path)
   dialog:AddTextField("Title", reg:GetString("Title", ""))
   dialog:AddTextField("Note", "")
 
-  if not dialog:ShowDialog() then return false end
+  local dialog_ok = dialog:ShowDialog()
+  SaveWindowState(reg, dialog)
+  if not dialog_ok then return false end
 
   lang = dialog:GetRadioIndex("Lang")
   reg:SetInt("Lang", lang)
