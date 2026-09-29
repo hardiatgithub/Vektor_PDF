@@ -10,3 +10,9 @@
 # Windows
 Thumbs.db
 desktop.ini
+
+# Other gadget files
+._.DS_Store
+.DS_Store
+*.vgadget
+._*
