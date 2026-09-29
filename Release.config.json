@@ -1,0 +1,7 @@
+{
+    "ModuleToCreate": "Vektor_PDF",
+    "MainLuaFile": "Vektor_PDF_dev.lua",
+    "MainHTMLFile": "Vektor_PDF_dev.htm",
+    "FilesToRelease": [
+    ]
+}
