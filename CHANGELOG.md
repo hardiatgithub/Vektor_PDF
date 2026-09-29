@@ -5,9 +5,17 @@ Neueste Version steht oben.
 
 ## [Unveröffentlicht]
 
+### Geändert
+- **Release-Ablauf** (Beitrag von Gremlin): Entwicklungsdateien heißen jetzt `Vektor_PDF_dev.lua` /
+  `Vektor_PDF_dev.htm`; `MakeRelease.ps1` setzt Version und Unterversion und erzeugt die `.vgadget`-Datei
+  im Ordner `release`. Die Version wird im Dialog, im Fenstertitel und in der Abschlussmeldung angezeigt.
+
 ### Behoben
 - Bei Jobs mit **mehreren Seiten (Sheets)** lagen alle Teile im PDF übereinander. Die Seiten werden jetzt
   über ihren Namen erkannt (die Seiten-Kennungen von VCarve V12.5 sind interne Objekte).
+- Bei **hoher Bildschirm-Skalierung** (z. B. 150 %) war die Schrift in den Eingabefeldern zu groß.
+  Die Felder haben jetzt eine feste Schrift und wachsen mit; passt der Dialog nicht ins Fenster,
+  wird er automatisch verkleinert, sodass OK/Abbrechen sichtbar bleiben.
 
 ### Neu
 - Auswahl **„Seiten: Aktuelle Seite / Alle Seiten“** im Dialog. „Alle Seiten“ erzeugt ein **mehrseitiges PDF**
