@@ -9,7 +9,9 @@
     C:\Users\Public\Documents\Vectric Files\Gadgets\<Programm> V12.5\  kopieren
 ]]
 
-local VERSION = "1.3.2"         -- bei jedem Release anpassen (siehe CHANGELOG.md)
+local G_version = "dev"         -- bei jedem Release anpassen (siehe CHANGELOG.md)
+local G_subVersion = "development"
+local G_title = "Vektor_PDF"
 
 local atan2 = math.atan2 or math.atan
 local MM = 72 / 25.4            -- Punkte je mm (PDF-Einheit)
@@ -694,9 +696,9 @@ function main(script_path)
     return false
   end
 
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF.htm", 520, 895, "Vektor_PDF " .. VERSION)
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF_".. G_version.. ".htm", 520, 870, string.format("%s - Version %s %s", G_title, G_version, G_subVersion))
   dialog:AddRadioGroup("Lang", lang)
-  dialog:AddTextField("Version", "v" .. VERSION)
+  dialog:AddTextField("Version", "v" .. G_version)
   -- Zahlenfelder als Text: Komma und Punkt werden beide akzeptiert
   local function NumStr(v)                            -- Anzeige passend zur Sprache
     local str = string.format("%.3f", v)
@@ -1148,7 +1150,7 @@ function main(script_path)
     return false
   end
 
-  local msg = "Vektor_PDF v" .. VERSION .. "\n\n" ..
+  local msg = "Vektor_PDF v" .. G_version .. "\n\n" ..
               T("PDF gespeichert:\n", "PDF saved:\n") .. fd.PathName ..
               "\n\n" .. #paths .. T(" Vektoren, Linienstaerke ", " vectors, line width ") .. NumStr(line_mm) .. " mm"
   if #pages > 1 then
