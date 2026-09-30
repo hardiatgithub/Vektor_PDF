@@ -701,7 +701,20 @@ function main(script_path)
     return false
   end
 
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF_".. G_version.. ".htm", 520, 895, G_title .. " - Version " .. VersionText())
+  -- Dialoggroesse (fuer hochaufloesende Bildschirme): Fenster und Inhalt werden skaliert
+  local UI_SCALES = { 100, 125, 150, 200 }
+  local ui_idx = reg:GetInt("UiScale", 1)
+  if ui_idx > #UI_SCALES then ui_idx = #UI_SCALES end   -- z. B. frueher gespeicherte 250 %
+  if ui_idx < 1 then ui_idx = 1 end
+  local ui_f = UI_SCALES[ui_idx] / 100
+  -- Fenster nie groesser als der Bildschirm (Groesse meldet der Dialog beim letzten Oeffnen)
+  local win_w, win_h = math.floor(520 * ui_f), math.floor(810 * ui_f)
+  local scr_w, scr_h = reg:GetInt("ScreenW", 0), reg:GetInt("ScreenH", 0)
+  if scr_h > 300 then win_h = math.min(win_h, scr_h - 60) end
+  if scr_w > 300 then win_w = math.min(win_w, scr_w - 40) end
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF_".. G_version.. ".htm",
+                             win_w, win_h, G_title .. " - Version " .. VersionText())
+  dialog:AddRadioGroup("UiScale", ui_idx)
   dialog:AddRadioGroup("Lang", lang)
   dialog:AddTextField("Version", "v" .. VersionText())
   -- Zahlenfelder als Text: Komma und Punkt werden beide akzeptiert
@@ -736,10 +749,22 @@ function main(script_path)
   dialog:AddTextField("Title", reg:GetString("Title", ""))
   dialog:AddTextField("Note", "")
 
-  if not dialog:ShowDialog() then return false end
+  dialog:AddTextField("ScrW", "")
+  dialog:AddTextField("ScrH", "")
+  local dialog_ok = dialog:ShowDialog()
+  -- Bildschirmgroesse merken (auch bei Abbrechen), damit das Fenster beim naechsten Mal passt
+  local sw = tonumber(dialog:GetTextField("ScrW") or "")
+  local sh = tonumber(dialog:GetTextField("ScrH") or "")
+  if sw and sw > 300 then reg:SetInt("ScreenW", math.floor(sw)) end
+  if sh and sh > 300 then reg:SetInt("ScreenH", math.floor(sh)) end
+  if not dialog_ok then
+    reg:SetInt("UiScale", dialog:GetRadioIndex("UiScale"))
+    return false
+  end
 
   lang = dialog:GetRadioIndex("Lang")
   reg:SetInt("Lang", lang)
+  reg:SetInt("UiScale", dialog:GetRadioIndex("UiScale"))
   local bad = {}
   local function GetNum(id)                           -- "0,5" und "0.5" -> 0.5
     local t = (dialog:GetTextField(id) or ""):gsub("%s", "")

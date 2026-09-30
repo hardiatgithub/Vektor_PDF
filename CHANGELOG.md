@@ -16,6 +16,9 @@ Neueste Version steht oben.
 - Bei **hoher Bildschirm-Skalierung** (z. B. 150 %) war die Schrift in den Eingabefeldern zu groß.
   Die Felder haben jetzt eine feste Schrift und wachsen mit; passt der Dialog nicht ins Fenster,
   wird er automatisch verkleinert, sodass OK/Abbrechen sichtbar bleiben.
+- **Dialoggröße** wählbar (100 / 125 / 150 / 200 %) unten links im Dialog – für hochauflösende
+  Bildschirme. Fenster und Schrift werden vergrößert; die Einstellung gilt ab dem nächsten Öffnen.
+  Das Fenster wird nie größer als der Bildschirm.
 
 ### Neu
 - Auswahl **„Seiten: Aktuelle Seite / Alle Seiten“** im Dialog. „Alle Seiten“ erzeugt ein **mehrseitiges PDF**

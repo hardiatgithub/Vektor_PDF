@@ -1,2 +1,2 @@
-Version=1.0
-SubVersion=alpha
+Version=1.4.0
+SubVersion=beta.1

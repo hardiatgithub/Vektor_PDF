@@ -5,7 +5,6 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <title>PDF Export</title>
 <style>
-  html, body { overflow: auto; }
   body { font-family: Arial, sans-serif; font-size: 12px; background: #f0f0f0; margin: 12px; }
   h2 { font-size: 14px; margin: 0 0 10px 0; }
   .lang { float: right; font-size: 11px; font-weight: normal; }
@@ -20,6 +19,7 @@
   input.txt { width: 27em; }
   .hint { color: #666; font-size: 11px; }
   .buttons { text-align: right; margin-top: 10px; }
+  .size { display: block; text-align: left; font-size: 11px; color: #555; margin-bottom: 6px; }
   .FormButton { width: 80px; margin-left: 6px; }
   input.off { background: #e4e4e4; color: #999; border-color: #ccc; }
   input.ver { border: 0; background: transparent; color: #888; font-size: 11px; width: 10em; padding: 0; }
@@ -115,7 +115,15 @@
   <label><input type="checkbox" id="DrawBorder"> <span class="t" data-en="Print material outline in grey">Materialumriss grau mitdrucken</span></label>
 </fieldset>
 
+<input type="text" id="ScrW" style="display:none"><input type="text" id="ScrH" style="display:none">
 <div class="buttons">
+  <span class="size">
+    <span class="t" data-en="Dialog size:">Dialoggröße:</span>
+    <label><input type="radio" name="UiScale" value="1"> 100%</label>
+    <label><input type="radio" name="UiScale" value="2"> 125%</label>
+    <label><input type="radio" name="UiScale" value="3"> 150%</label>
+    <label><input type="radio" name="UiScale" value="4"> 200%</label>
+  </span>
   <input id="ButtonOK" class="FormButton" type="button" value="OK">
   <input id="ButtonCancel" class="FormButton" type="button" value="Abbrechen" data-en="Cancel">
 </div>
@@ -161,23 +169,59 @@ function syncDimLayer() {
   tf.className = cb.checked ? "num off" : "num";
 }
 
-function syncAll() { syncLang(); syncDimLayer(); }
+function syncAll() { syncLang(); syncDimLayer(); syncScale(); }
 
 // Bei hoher Bildschirm-Skalierung (z. B. 150 %) wird die Schrift groesser, das Fenster aber nicht:
 // Inhalt dann so weit verkleinern, dass alles inkl. OK/Abbrechen ins Fenster passt.
+// Gewaehlte Dialoggroesse (1 = 100 %, 2 = 125 %, 3 = 150 %, 4 = 200 %)
+function uiScale() {
+  var f = [1, 1, 1.25, 1.5, 2];
+  var r = document.getElementsByName("UiScale");
+  for (var i = 0; i < r.length; i++) { if (r[i].checked) return f[parseInt(r[i].value, 10)] || 1; }
+  return 1;
+}
+
 function fitToWindow() {
   var b = document.body, de = document.documentElement;
   if (!b) return;
   b.style.zoom = 1;
+  b.style.width = "";
   var availH = de.clientHeight || b.clientHeight;
   var availW = de.clientWidth || b.clientWidth;
+  // Ist das Fenster groesser als der Bildschirm, nur den sichtbaren Teil verwenden
+  if (window.screen && screen.availHeight) availH = Math.min(availH, screen.availHeight - 90);
+  if (window.screen && screen.availWidth) availW = Math.min(availW, screen.availWidth - 20);
   var needH = b.scrollHeight + 24;
-  var needW = b.scrollWidth + 24;
+  var needW = 520;                     // Breite, fuer die der Dialog gestaltet ist
   if (!availH || !availW || !needH || !needW) return;
-  var z = Math.min(1, availH / needH, availW / needW);
-  if (z < 1) b.style.zoom = Math.max(0.5, Math.floor(z * 100) / 100);
+  // gewuenschte Groesse, aber nie groesser als das Fenster
+  var z = Math.min(uiScale(), availH / needH, availW / needW);
+  z = Math.max(0.5, Math.floor(z * 100) / 100);
+  if (z != 1) {
+    // Der alte Internet Explorer vergroessert auch die Breite mit -> Breite vorher
+    // so setzen, dass der Inhalt nach dem Zoomen genau ins Fenster passt
+    // (sonst rutschen rechtsbuendige Teile wie OK/Abbrechen aus dem Bild).
+    var cw = de.clientWidth || b.clientWidth;
+    b.style.width = Math.max(300, Math.floor(cw / z) - 26) + "px";
+    b.style.zoom = z;
+  }
 }
-window.onload = function () { syncAll(); fitToWindow(); setTimeout(fitToWindow, 400); };
+var shownScale = 0;
+function syncScale() {
+  var s = uiScale();
+  if (s != shownScale) { shownScale = s; fitToWindow(); }
+}
+// Bildschirmgroesse an VCarve melden (Fenstergroesse beim naechsten Oeffnen begrenzen)
+function reportScreen() {
+  try {
+    if (window.screen && screen.availWidth) {
+      document.getElementById("ScrW").value = screen.availWidth;
+      document.getElementById("ScrH").value = screen.availHeight;
+    }
+  } catch (e) {}
+}
+window.onload = function () { reportScreen(); syncAll(); fitToWindow(); setTimeout(fitToWindow, 400); };
+setInterval(reportScreen, 1000);
 window.onresize = fitToWindow;
 
 // VCarve setzt die Werte erst nach dem Laden -> Zustand regelmaessig abgleichen
