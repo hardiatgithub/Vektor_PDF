@@ -10,6 +10,14 @@ Neueste Version steht oben.
   `Vektor_PDF_dev.htm`; `MakeRelease.ps1` setzt Version und Unterversion und erzeugt die `.vgadget`-Datei
   im Ordner `release`. Die Version wird im Dialog, im Fenstertitel und in der Abschlussmeldung angezeigt.
 
+### Verbessert
+- **Winkelmaße übersichtlicher**: kleinere Maßbögen (4–10 mm, passend zur Schenkellänge); Zahlen weichen
+  anderen Zahlen aus; gleiche Winkel dicht nebeneinander (z. B. Innen- und Außenkontur einer Doppellinie)
+  werden bei „Winkel an Ecken“ nur einmal bemaßt.
+- **Längenmaße mit Abstand**: Einzel- und Gesamtmaße, die sich überschneiden würden, werden automatisch
+  in eigene Reihen nach außen versetzt – keine Maßlinie und keine Zahl liegt mehr auf einer anderen.
+  Der Platz am Blattrand wird dafür automatisch vergrößert.
+
 ### Behoben
 - Bei Jobs mit **mehreren Seiten (Sheets)** lagen alle Teile im PDF übereinander. Die Seiten werden jetzt
   über ihren Namen erkannt (die Seiten-Kennungen von VCarve V12.5 sind interne Objekte).

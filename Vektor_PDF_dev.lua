@@ -469,7 +469,23 @@ local Draw = {}
 Draw.__index = Draw
 
 function Draw.new(font_size, line_w)
-  return setmetatable({ s = {}, fs = font_size, lw = line_w, arrow = 2.5 * MM }, Draw)
+  return setmetatable({ s = {}, fs = font_size, lw = line_w, arrow = 2.5 * MM, boxes = {} }, Draw)
+end
+-- Flaeche einer Beschriftung (x0, y0, x1, y1), damit sich Zahlen nicht ueberdecken
+local function TextBox(x, y, str, size, rotated, align)
+  local w = TextWidth(str, size)
+  local shift = (align == "left") and 0 or (align == "right") and w or w / 2
+  if rotated then return { x - 0.8 * size, y - shift, x + 0.2 * size, y - shift + w } end
+  return { x - shift, y - 0.25 * size, x - shift + w, y + 0.8 * size }
+end
+function Draw:boxFree(b)
+  local pad = 0.5 * MM
+  for _, o in ipairs(self.boxes) do
+    if b[1] < o[3] + pad and b[3] > o[1] - pad and b[2] < o[4] + pad and b[4] > o[2] - pad then
+      return false
+    end
+  end
+  return true
 end
 function Draw:add(x) self.s[#self.s + 1] = x end
 function Draw:line(x1, y1, x2, y2)
@@ -484,6 +500,7 @@ function Draw:arrowhead(x, y, dx, dy)       -- Spitze bei x,y; zeigt Richtung dx
 end
 function Draw:text(x, y, str, size, rotated, align)
   size = size or self.fs
+  self.boxes[#self.boxes + 1] = TextBox(x, y, str, size, rotated, align)
   local w = TextWidth(str, size)
   local shift = (align == "left") and 0 or (align == "right") and w or w / 2
   if rotated then
@@ -551,8 +568,9 @@ function Draw:angleDim(vx, vy, ax, ay, bx, by, label)
   while sweep > math.pi do sweep = sweep - 2 * math.pi end
   while sweep <= -math.pi do sweep = sweep + 2 * math.pi end
   if sweep < 0 then a1, sweep = a1 + sweep, -sweep end        -- immer gegen den Uhrzeigersinn
-  -- Bogenradius: hoechstens 15 mm, nicht laenger als der kuerzere Schenkel (min. 6 mm)
-  local r = math.max(6 * MM, math.min(15 * MM, math.min(la, lb)))
+  -- Bogenradius: knapp die Haelfte des kuerzeren Schenkels, 4 bis 10 mm
+  -- (grosse Boegen ueberdecken sich bei kleinen Teilen sonst gegenseitig)
+  local r = math.max(4 * MM, math.min(10 * MM, 0.45 * math.min(la, lb)))
   -- Schenkel bis zum Bogen verlaengern, falls sie kuerzer sind
   local function leg(len, ang)
     if len < r then
@@ -578,7 +596,24 @@ function Draw:angleDim(vx, vy, ax, ay, bx, by, label)
   -- Text ausserhalb der Bogenmitte
   local am = a1 + sweep / 2
   local tr = r + 1.5 * MM + self.fs * 0.8
-  self:text(vx + tr * math.cos(am), vy + tr * math.sin(am) - self.fs * 0.35, label)
+  local px, py = vx + tr * math.cos(am), vy + tr * math.sin(am) - self.fs * 0.35
+  -- liegt dort schon eine andere Zahl, weiter nach aussen bzw. leicht seitlich ausweichen
+  if not self:boxFree(TextBox(px, py, label, self.fs)) then
+    local found = false
+    for step = 1, 4 do
+      for _, da in ipairs({ 0, 0.25, -0.25 }) do
+        local a = am + da * sweep
+        local t = tr + step * self.fs * 1.1
+        local qx, qy = vx + t * math.cos(a), vy + t * math.sin(a) - self.fs * 0.35
+        if self:boxFree(TextBox(qx, qy, label, self.fs)) then
+          px, py, found = qx, qy, true
+          break
+        end
+      end
+      if found then break end
+    end
+  end
+  self:text(px, py, label)
 end
 -- Radius: Pfeil von aussen auf den Bogen (Punkt px,py), Mittelpunkt cx,cy
 function Draw:radius(cx, cy, px, py, label)
@@ -933,26 +968,106 @@ function main(script_path)
     local title_res = lines > 0 and (lines * fs * 1.5 + 3 * MM) or 0
     local foot_res  = show_scale and (fs * 1.5) or 0
 
-    local page_w, page_h, scale
-    if scale_mode == 2 then
-      scale  = unit_pt
-      page_w = w * scale + 2 * margin + dim_res
-      page_h = h * scale + 2 * margin + dim_res + title_res + foot_res
-    else
-      page_w, page_h = 595.28, 841.89
-      local landscape = (orient == 3) or (orient ~= 2 and w > h)
-      if landscape then page_w, page_h = page_h, page_w end
-      scale = math.min((page_w - 2 * margin - dim_res) / w,
-                       (page_h - 2 * margin - dim_res - title_res - foot_res) / h)
+    -- Seitenaufteilung; res = Platz fuer Masse links und unten (wird bei Bedarf vergroessert)
+    local page_w, page_h, scale, offx, offy
+    local function Layout(res)
+      if scale_mode == 2 then
+        scale  = unit_pt
+        page_w = w * scale + 2 * margin + res
+        page_h = h * scale + 2 * margin + res + title_res + foot_res
+      else
+        page_w, page_h = 595.28, 841.89
+        local landscape = (orient == 3) or (orient ~= 2 and w > h)
+        if landscape then page_w, page_h = page_h, page_w end
+        scale = math.min((page_w - 2 * margin - res) / w,
+                         (page_h - 2 * margin - res - title_res - foot_res) / h)
+      end
+      local area_x = margin + res
+      local area_y = margin + res + foot_res
+      local area_w = page_w - margin - area_x
+      local area_h = page_h - margin - title_res - area_y
+      offx = area_x + (area_w - w * scale) / 2
+      offy = area_y + (area_h - h * scale) / 2
     end
-    local area_x = margin + dim_res
-    local area_y = margin + dim_res + foot_res
-    local area_w = page_w - margin - area_x
-    local area_h = page_h - margin - title_res - area_y
-    local offx = area_x + (area_w - w * scale) / 2
-    local offy = area_y + (area_h - h * scale) / 2
     local function tx(x) return offx + (x - minx) * scale end
     local function ty(y) return offy + (y - miny) * scale end
+
+    -- Lineare Masse planen: jede Masslinie bekommt eine eigene Spur, damit keine
+    -- Masslinie und keine Zahl auf einer anderen liegt
+    local near = 5 * MM                  -- Abstand Einzelmasse
+    local far  = near + 2 * fs + 3 * MM  -- Abstand Gesamtmasse (mindestens)
+    local lane = fs + 2.5 * MM           -- Abstand zwischen zwei Masslinien
+    local function PlanDims()
+      local hs, vs, cs = {}, {}, {}
+      local function item(a, b, ref, line, label)
+        local tw, mid = TextWidth(label, fs), (a + b) / 2
+        return { a = a, b = b, ref = ref, line = line, label = label,
+                 lo = math.min(a, mid - tw / 2) - 1 * MM, hi = math.max(b, mid + tw / 2) + 1 * MM }
+      end
+      if dim_each then
+        local tol = in_mm and 0.05 or 0.002
+        local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4   -- Eingabe immer in mm
+        for _, p in ipairs(paths) do
+          local pw, ph = p.maxx - p.minx, p.maxy - p.miny
+          local is_total = math.abs(p.minx - vminx) < tol and math.abs(p.maxx - vmaxx) < tol and
+                           math.abs(p.miny - vminy) < tol and math.abs(p.maxy - vmaxy) < tol
+          local big_enough = math.max(pw, ph) >= min_dim
+          if p.closed and not p.in_group and big_enough and pw > tol and ph > tol and
+             not (is_total and dim_overall) then
+            if p.all_arcs and math.abs(pw - ph) < 0.01 * pw then
+              -- Kreis: Durchmesser ueber dem Kreis
+              cs[#cs + 1] = { tx((p.minx + p.maxx) / 2), ty(p.maxy) + 1.5 * MM, "\195\152 " .. fmt(pw) }
+            else
+              local same_w = dim_overall and math.abs(p.minx - vminx) < tol and math.abs(p.maxx - vmaxx) < tol
+              local same_h = dim_overall and math.abs(p.miny - vminy) < tol and math.abs(p.maxy - vmaxy) < tol
+              if not same_w then
+                hs[#hs + 1] = item(tx(p.minx), tx(p.maxx), ty(p.miny), ty(p.miny) - near, fmt(pw))
+              end
+              if not same_h then
+                vs[#vs + 1] = item(ty(p.miny), ty(p.maxy), tx(p.minx), tx(p.minx) - near, fmt(ph))
+              end
+            end
+          end
+        end
+      end
+      -- naechstgelegene zuerst; wer kollidiert, rutscht eine Spur weiter nach aussen
+      local function place(list, total)
+        table.sort(list, function(p, q) return p.ref > q.ref end)
+        if total then list[#list + 1] = total end
+        local done = {}
+        for _, it in ipairs(list) do
+          local moved = true
+          while moved do
+            moved = false
+            for _, q in ipairs(done) do
+              if it.lo < q.hi and it.hi > q.lo and math.abs(it.line - q.line) < lane - 0.01 then
+                it.line = q.line - lane
+                moved = true
+              end
+            end
+          end
+          done[#done + 1] = it
+        end
+      end
+      local th, tv
+      if dim_overall then
+        th = item(tx(vminx), tx(vmaxx), ty(vminy), ty(vminy) - far, fmt(vmaxx - vminx))
+        tv = item(ty(vminy), ty(vmaxy), tx(vminx), tx(vminx) - far, fmt(vmaxy - vminy))
+      end
+      place(hs, th); place(vs, tv)
+      -- benoetigter Platz unter bzw. links neben der Zeichnung
+      local depth = 0
+      for _, it in ipairs(hs) do depth = math.max(depth, ty(vminy) - it.line) end
+      for _, it in ipairs(vs) do depth = math.max(depth, tx(vminx) - it.line) end
+      return hs, vs, cs, depth
+    end
+
+    Layout(dim_res)
+    local hdims, vdims, cdims, depth = PlanDims()
+    if depth > dim_res + 0.5 then        -- mehr Spuren noetig -> mehr Platz reservieren
+      Layout(depth)
+      hdims, vdims, cdims = PlanDims()
+    end
 
     -- 1) Zeichnung
     local s = { f(line_mm * MM) .. " w 1 J 1 j " .. ColorOps(vec_color) }
@@ -981,34 +1096,9 @@ function main(script_path)
     local d = Draw.new(fs, dim_line_mm * MM)
     if arrow_mm and arrow_mm > 0 then d.arrow = arrow_mm * MM end
     d:add("q " .. f(dim_line_mm * MM) .. " w " .. ColorOps(dim_color))
-    local near = 5 * MM          -- Abstand Einzelmasse
-    local far  = near + 2 * fs + 3 * MM  -- Abstand Gesamtmasse
-    if dim_overall then
-      d:hdim(tx(vminx), tx(vmaxx), ty(vminy), ty(vminy) - far, fmt(vmaxx - vminx))
-      d:vdim(ty(vminy), ty(vmaxy), tx(vminx), tx(vminx) - far, fmt(vmaxy - vminy))
-    end
-    if dim_each then
-      local tol = in_mm and 0.05 or 0.002
-      local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4   -- Eingabe immer in mm
-      for _, p in ipairs(paths) do
-        local pw, ph = p.maxx - p.minx, p.maxy - p.miny
-        local is_total = math.abs(p.minx - vminx) < tol and math.abs(p.maxx - vmaxx) < tol and
-                         math.abs(p.miny - vminy) < tol and math.abs(p.maxy - vmaxy) < tol
-        local big_enough = math.max(pw, ph) >= min_dim
-        if p.closed and not p.in_group and big_enough and pw > tol and ph > tol and
-           not (is_total and dim_overall) then
-          if p.all_arcs and math.abs(pw - ph) < 0.01 * pw then
-            -- Kreis: Durchmesser ueber dem Kreis
-            d:text(tx((p.minx + p.maxx) / 2), ty(p.maxy) + 1.5 * MM, "\195\152 " .. fmt(pw))
-          else
-            local same_w = dim_overall and math.abs(p.minx - vminx) < tol and math.abs(p.maxx - vmaxx) < tol
-            local same_h = dim_overall and math.abs(p.miny - vminy) < tol and math.abs(p.maxy - vmaxy) < tol
-            if not same_w then d:hdim(tx(p.minx), tx(p.maxx), ty(p.miny), ty(p.miny) - near, fmt(pw)) end
-            if not same_h then d:vdim(ty(p.miny), ty(p.maxy), tx(p.minx), tx(p.minx) - near, fmt(ph)) end
-          end
-        end
-      end
-    end
+    for _, it in ipairs(hdims) do d:hdim(it.a, it.b, it.ref, it.line, it.label) end
+    for _, it in ipairs(vdims) do d:vdim(it.a, it.b, it.ref, it.line, it.label) end
+    for _, c in ipairs(cdims) do d:text(c[1], c[2], c[3]) end
 
     -- Radien an Boegen (gleiche Radien je Vektor nur einmal)
     if dim_radius then
@@ -1034,12 +1124,26 @@ function main(script_path)
     -- Winkel an Ecken zwischen zwei Geraden (90 und 180 Grad werden ausgelassen)
     if dim_angle then
       local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4
+      -- gleicher Winkel in der Naehe (z. B. Innen- und Aussenkontur einer Doppellinie)
+      -- wird nur einmal bemasst
+      local placed = {}
+      local near_pt = 8 * MM
+      local function already(x, y, deg)
+        for _, q in ipairs(placed) do
+          if math.abs(q[3] - deg) < 0.5 and (q[1] - x) ^ 2 + (q[2] - y) ^ 2 < near_pt * near_pt then
+            return true
+          end
+        end
+        placed[#placed + 1] = { x, y, deg }
+        return false
+      end
       for _, p in ipairs(paths) do
         local pw, ph = p.maxx - p.minx, p.maxy - p.miny
         if not p.in_group and math.max(pw, ph) >= min_dim then
           for _, cn in ipairs(PathCorners(p)) do
             local deg = cn[7]
-            if math.abs(deg - 90) > 0.5 and deg > 0.5 and deg < 179.5 then
+            if math.abs(deg - 90) > 0.5 and deg > 0.5 and deg < 179.5 and
+               not already(tx(cn[1]), ty(cn[2]), deg) then
               d:angleDim(tx(cn[1]), ty(cn[2]), tx(cn[3]), ty(cn[4]), tx(cn[5]), ty(cn[6]), fmtAng(deg))
             end
           end
