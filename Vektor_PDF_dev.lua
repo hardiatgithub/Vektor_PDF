@@ -688,6 +688,24 @@ local function WritePdf(filename, pages)
 end
 
 -- ------------------------------------------------------------------
+-- Fenstergroesse und Zoomstufe merken, damit der Dialog beim naechsten
+-- Start wieder so gross und so skaliert aufgeht wie zuletzt. Wird auch
+-- bei "Abbrechen" gespeichert, sonst geht die Groesse wieder verloren.
+-- ------------------------------------------------------------------
+local WIN_W_DEFAULT = 520
+local WIN_H_DEFAULT = 895
+
+local function SaveWindowState(reg, dialog)
+  if dialog.WindowWidth ~= nil and dialog.WindowWidth > 0 then
+    reg:SetDouble("WindowWidth", dialog.WindowWidth)
+  end
+  if dialog.WindowHeight ~= nil and dialog.WindowHeight > 0 then
+    reg:SetDouble("WindowHeight", dialog.WindowHeight)
+  end
+  reg:SetString("ZoomLevel", dialog:GetDropDownListValue("ZoomLevel") or "Auto")
+end
+
+-- ------------------------------------------------------------------
 -- Hauptprogramm
 -- ------------------------------------------------------------------
 function main(script_path)
@@ -701,20 +719,20 @@ function main(script_path)
     return false
   end
 
-  -- Dialoggroesse (fuer hochaufloesende Bildschirme): Fenster und Inhalt werden skaliert
-  local UI_SCALES = { 100, 125, 150, 200 }
-  local ui_idx = reg:GetInt("UiScale", 1)
-  if ui_idx > #UI_SCALES then ui_idx = #UI_SCALES end   -- z. B. frueher gespeicherte 250 %
-  if ui_idx < 1 then ui_idx = 1 end
-  local ui_f = UI_SCALES[ui_idx] / 100
+  -- Zuletzt benutzte Fenstergroesse wiederherstellen (Standard, falls noch nichts
+  -- gemerkt wurde oder ein unbrauchbar kleiner Wert in der Registry steht)
+  local win_w = reg:GetDouble("WindowWidth", WIN_W_DEFAULT)
+  local win_h = reg:GetDouble("WindowHeight", WIN_H_DEFAULT)
+  if win_w < 300 then win_w = WIN_W_DEFAULT end
+  if win_h < 300 then win_h = WIN_H_DEFAULT end
+
   -- Fenster nie groesser als der Bildschirm (Groesse meldet der Dialog beim letzten Oeffnen)
-  local win_w, win_h = math.floor(520 * ui_f), math.floor(810 * ui_f)
   local scr_w, scr_h = reg:GetInt("ScreenW", 0), reg:GetInt("ScreenH", 0)
   if scr_h > 300 then win_h = math.min(win_h, scr_h - 60) end
   if scr_w > 300 then win_w = math.min(win_w, scr_w - 40) end
-  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF_".. G_version.. ".htm",
-                             win_w, win_h, G_title .. " - Version " .. VersionText())
-  dialog:AddRadioGroup("UiScale", ui_idx)
+
+  local dialog = HTML_Dialog(false, "file:" .. script_path .. "\\Vektor_PDF_".. G_version.. ".htm", win_w, win_h, G_title .. " - Version " .. VersionText())
+  dialog:AddDropDownList("ZoomLevel", reg:GetString("ZoomLevel", "Auto"))
   dialog:AddRadioGroup("Lang", lang)
   dialog:AddTextField("Version", "v" .. VersionText())
   -- Zahlenfelder als Text: Komma und Punkt werden beide akzeptiert
@@ -752,19 +770,16 @@ function main(script_path)
   dialog:AddTextField("ScrW", "")
   dialog:AddTextField("ScrH", "")
   local dialog_ok = dialog:ShowDialog()
+  SaveWindowState(reg, dialog)
   -- Bildschirmgroesse merken (auch bei Abbrechen), damit das Fenster beim naechsten Mal passt
   local sw = tonumber(dialog:GetTextField("ScrW") or "")
   local sh = tonumber(dialog:GetTextField("ScrH") or "")
   if sw and sw > 300 then reg:SetInt("ScreenW", math.floor(sw)) end
   if sh and sh > 300 then reg:SetInt("ScreenH", math.floor(sh)) end
-  if not dialog_ok then
-    reg:SetInt("UiScale", dialog:GetRadioIndex("UiScale"))
-    return false
-  end
+  if not dialog_ok then return false end
 
   lang = dialog:GetRadioIndex("Lang")
   reg:SetInt("Lang", lang)
-  reg:SetInt("UiScale", dialog:GetRadioIndex("UiScale"))
   local bad = {}
   local function GetNum(id)                           -- "0,5" und "0.5" -> 0.5
     local t = (dialog:GetTextField(id) or ""):gsub("%s", "")

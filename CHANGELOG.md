@@ -16,9 +16,6 @@ Neueste Version steht oben.
 - Bei **hoher Bildschirm-Skalierung** (z. B. 150 %) war die Schrift in den Eingabefeldern zu groß.
   Die Felder haben jetzt eine feste Schrift und wachsen mit; passt der Dialog nicht ins Fenster,
   wird er automatisch verkleinert, sodass OK/Abbrechen sichtbar bleiben.
-- **Dialoggröße** wählbar (100 / 125 / 150 / 200 %) unten links im Dialog – für hochauflösende
-  Bildschirme. Fenster und Schrift werden vergrößert; die Einstellung gilt ab dem nächsten Öffnen.
-  Das Fenster wird nie größer als der Bildschirm.
 
 ### Neu
 - Auswahl **„Seiten: Aktuelle Seite / Alle Seiten“** im Dialog. „Alle Seiten“ erzeugt ein **mehrseitiges PDF**
@@ -26,6 +23,10 @@ Neueste Version steht oben.
   wie bisher die Auswahl exportiert.
 - **A4-Ausrichtung** wählbar: Automatisch (je Seite passend), Hochformat oder Querformat –
   damit alle Seiten eines mehrseitigen PDFs gleich ausgerichtet werden können.
+- **Dialoggröße und Zoom** werden gemerkt: Das Fenster öffnet sich wieder so groß wie beim letzten Mal
+  (auch nach „Abbrechen“), und die neue Auswahl **Zoom** unten links skaliert den Dialoginhalt.
+  „Auto“ richtet sich nach der Bildschirm-DPI, sonst ist ein fester Wert von 100 % bis 250 % wählbar. (Beitrag von Gremlin)
+  Das Fenster wird nie größer als der Bildschirm.
 
 ## [1.3.2] – 2026-09-28
 
