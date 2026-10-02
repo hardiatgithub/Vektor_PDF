@@ -34,6 +34,7 @@ local function ColorOps(index)                -- PDF-Operatoren fuer Strich- und
   return col .. " RG " .. col .. " rg"
 end
 local skipped = 0
+local straight_bez = 0   -- gerade Bezier-Kurven, die als Linie behandelt werden
 local skipped_dims = 0   -- davon Vectric-Bemassungen (CadLinearDimensioningObject usw.)
 local bezier_fallback = 0
 
@@ -206,13 +207,34 @@ local function ContourToPath(contour, seg_len)
       p.segs[#p.segs + 1] = false                     -- kein gerades Stueck
     elseif span.IsBezierType then
       p.all_arcs = false
-      p.segs[#p.segs + 1] = false
       local bez = CastSpanToBezierSpan(span)
       local c1, c2 = BezierControl(bez, 1), BezierControl(bez, 2)
-      if c1 and c2 then
+      local pts = nil
+      if not (c1 and c2) then pts = BezierSample(span, bez, 32) end
+      -- Kurve, die in Wahrheit gerade ist (Kontrollpunkte auf der Verbindungslinie)?
+      -- Dann wie eine Linie behandeln, damit sie bemasst wird und Ecken-Winkel bekommt.
+      local function Straight()
+        local dx, dy = p2.X - p1.X, p2.Y - p1.Y
+        local len = math.sqrt(dx * dx + dy * dy)
+        if len < 1e-9 then return false end
+        local tol = seg_len * 0.05
+        local function off(q) return math.abs((q[1] - p1.X) * dy - (q[2] - p1.Y) * dx) / len end
+        if c1 and c2 then return off(c1) <= tol and off(c2) <= tol end
+        if pts then
+          for _, q in ipairs(pts) do if off(q) > tol then return false end end
+          return true
+        end
+        return false
+      end
+      if Straight() then
+        straight_bez = straight_bez + 1
+        cmds[#cmds + 1] = { "l", p2.X, p2.Y }
+        p.segs[#p.segs + 1] = { p1.X, p1.Y, p2.X, p2.Y }
+      elseif c1 and c2 then
+        p.segs[#p.segs + 1] = false
         cmds[#cmds + 1] = { "c", c1[1], c1[2], c2[1], c2[2], p2.X, p2.Y }
       else
-        local pts = BezierSample(span, bez, 32)
+        p.segs[#p.segs + 1] = false
         if pts then
           for _, q in ipairs(pts) do cmds[#cmds + 1] = { "l", q[1], q[2] } end
           cmds[#cmds] = { "l", p2.X, p2.Y }
@@ -565,6 +587,18 @@ function Draw:alignedDim(x1, y1, x2, y2, label)
   local mx, my = (x1 + x2) / 2 + tnx * 1 * MM, (y1 + y2) / 2 + tny * 1 * MM
   self:textAngle(mx, my, label, ang)
 end
+-- Mass parallel zu einer schraegen Linie, um 'off' nach unten/links versetzt, mit Hilfslinien
+function Draw:offsetDim(x1, y1, x2, y2, label, off)
+  local dx, dy = x2 - x1, y2 - y1
+  local len = math.sqrt(dx * dx + dy * dy)
+  if len < 1e-6 then return end
+  local nx, ny = -dy / len, dx / len
+  if ny > 1e-9 or (math.abs(ny) <= 1e-9 and nx > 0) then nx, ny = -nx, -ny end   -- nach unten/links
+  local gap, over = 1 * MM, 1.5 * MM
+  self:line(x1 + nx * gap, y1 + ny * gap, x1 + nx * (off + over), y1 + ny * (off + over))
+  self:line(x2 + nx * gap, y2 + ny * gap, x2 + nx * (off + over), y2 + ny * (off + over))
+  self:alignedDim(x1 + nx * off, y1 + ny * off, x2 + nx * off, y2 + ny * off, label)
+end
 -- Winkelmass: Scheitel vx,vy, Schenkel Richtung a und b (alles in PDF-Punkten)
 function Draw:angleDim(vx, vy, ax, ay, bx, by, label)
   local la = math.sqrt((ax - vx) ^ 2 + (ay - vy) ^ 2)
@@ -799,6 +833,7 @@ function main(script_path)
   dialog:AddCheckBox("DrawBorder", reg:GetBool("DrawBorder", false))
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
+  dialog:AddCheckBox("DimPoly", reg:GetBool("DimPoly", false))
   AddNum("MinDim", 25)
   dialog:AddCheckBox("DimRadius", reg:GetBool("DimRadius", false))
   dialog:AddCheckBox("DimAngle", reg:GetBool("DimAngle", false))
@@ -854,6 +889,7 @@ function main(script_path)
   local draw_border = dialog:GetCheckBox("DrawBorder")
   local dim_overall = dialog:GetCheckBox("DimOverall")
   local dim_each    = dialog:GetCheckBox("DimEach")
+  local dim_poly    = dialog:GetCheckBox("DimPoly")
   local min_dim_mm  = GetNum("MinDim")
   if #bad > 0 then
     DisplayMessageBox(T("Bitte gueltige Zahlen eingeben (Komma oder Punkt): ",
@@ -881,6 +917,7 @@ function main(script_path)
   reg:SetBool("DrawBorder", draw_border)
   reg:SetBool("DimOverall", dim_overall)
   reg:SetBool("DimEach", dim_each)
+  reg:SetBool("DimPoly", dim_poly)
   reg:SetDouble("MinDim", min_dim_mm)
   reg:SetBool("DimRadius", dim_radius)
   reg:SetBool("DimAngle", dim_angle)
@@ -920,6 +957,7 @@ function main(script_path)
   -- Konturen
   skipped = 0
   skipped_dims = 0
+  straight_bez = 0
   bezier_fallback = 0
   bezier_info = nil
   local sheet_list, active_id = JobSheets(job)
@@ -969,7 +1007,7 @@ function main(script_path)
     -- Platz fuer Bemassung und Titel reservieren
     local fs     = font_mm * MM
     local margin = margin_mm * MM
-    local dim_res = (dim_overall or dim_each) and (8 * MM + 2 * fs) or 0
+    local dim_res = (dim_overall or dim_each or dim_poly) and (8 * MM + 2 * fs) or 0
     local lines = 0
     if title ~= "" then lines = lines + 1.4 end
     if note  ~= "" then lines = lines + 1 end
@@ -1006,11 +1044,24 @@ function main(script_path)
     local far  = near + 2 * fs + 3 * MM  -- Abstand Gesamtmasse (mindestens)
     local lane = fs + 2.5 * MM           -- Abstand zwischen zwei Masslinien
     local function PlanDims()
-      local hs, vs, cs = {}, {}, {}
+      local hs, vs, cs, ls = {}, {}, {}, {}
       local function item(a, b, ref, line, label)
         local tw, mid = TextWidth(label, fs), (a + b) / 2
         return { a = a, b = b, ref = ref, line = line, label = label,
                  lo = math.min(a, mid - tw / 2) - 1 * MM, hi = math.max(b, mid + tw / 2) + 1 * MM }
+      end
+      -- gerades Stueck bemassen: waagrecht/senkrecht in Spuren, schraeg parallel daneben
+      local function StraightDim(s, min_len, tol)
+        local x1, y1, x2, y2 = s[1], s[2], s[3], s[4]
+        local len = math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2)
+        if len < min_len or len <= tol then return end
+        if math.abs(y2 - y1) < tol then
+          hs[#hs + 1] = item(tx(math.min(x1, x2)), tx(math.max(x1, x2)), ty(y1), ty(y1) - near, fmt(len))
+        elseif math.abs(x2 - x1) < tol then
+          vs[#vs + 1] = item(ty(math.min(y1, y2)), ty(math.max(y1, y2)), tx(x1), tx(x1) - near, fmt(len))
+        else
+          ls[#ls + 1] = { tx(x1), ty(y1), tx(x2), ty(y2), fmt(len) }
+        end
       end
       if dim_each then
         local tol = in_mm and 0.05 or 0.002
@@ -1020,7 +1071,11 @@ function main(script_path)
           local is_total = math.abs(p.minx - vminx) < tol and math.abs(p.maxx - vmaxx) < tol and
                            math.abs(p.miny - vminy) < tol and math.abs(p.maxy - vmaxy) < tol
           local big_enough = math.max(pw, ph) >= min_dim
-          if p.closed and not p.in_group and big_enough and pw > tol and ph > tol and
+          local s1 = (not p.closed) and #p.segs == 1 and type(p.segs[1]) == "table" and p.segs[1] or nil
+          if s1 and not p.in_group then
+            -- einzelne gerade Linie: Laenge bemassen (waagrecht/senkrecht mit Spuren, sonst schraeg)
+            StraightDim(s1, min_dim, tol)
+          elseif p.closed and not p.in_group and big_enough and pw > tol and ph > tol and
              not (is_total and dim_overall) then
             if p.all_arcs and math.abs(pw - ph) < 0.01 * pw then
               -- Kreis: Durchmesser ueber dem Kreis
@@ -1034,6 +1089,18 @@ function main(script_path)
               if not same_h then
                 vs[#vs + 1] = item(ty(p.miny), ty(p.maxy), tx(p.minx), tx(p.minx) - near, fmt(ph))
               end
+            end
+          end
+        end
+      end
+      if dim_poly then
+        local tol = in_mm and 0.05 or 0.002
+        local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4
+        for _, p in ipairs(paths) do
+          local pw, ph = p.maxx - p.minx, p.maxy - p.miny
+          if not p.closed and not p.in_group and #p.segs > 1 and math.max(pw, ph) >= min_dim then
+            for _, s in ipairs(p.segs) do
+              if type(s) == "table" then StraightDim(s, tol, tol) end
             end
           end
         end
@@ -1067,14 +1134,14 @@ function main(script_path)
       local depth = 0
       for _, it in ipairs(hs) do depth = math.max(depth, ty(vminy) - it.line) end
       for _, it in ipairs(vs) do depth = math.max(depth, tx(vminx) - it.line) end
-      return hs, vs, cs, depth
+      return hs, vs, cs, depth, ls
     end
 
     Layout(dim_res)
-    local hdims, vdims, cdims, depth = PlanDims()
+    local hdims, vdims, cdims, depth, ldims = PlanDims()
     if depth > dim_res + 0.5 then        -- mehr Spuren noetig -> mehr Platz reservieren
       Layout(depth)
-      hdims, vdims, cdims = PlanDims()
+      hdims, vdims, cdims, _, ldims = PlanDims()
     end
 
     -- 1) Zeichnung
@@ -1107,6 +1174,7 @@ function main(script_path)
     for _, it in ipairs(hdims) do d:hdim(it.a, it.b, it.ref, it.line, it.label) end
     for _, it in ipairs(vdims) do d:vdim(it.a, it.b, it.ref, it.line, it.label) end
     for _, c in ipairs(cdims) do d:text(c[1], c[2], c[3]) end
+    for _, l in ipairs(ldims) do d:offsetDim(l[1], l[2], l[3], l[4], l[5], near) end
 
     -- Radien an Boegen (gleiche Radien je Vektor nur einmal)
     if dim_radius then
@@ -1349,6 +1417,10 @@ function main(script_path)
             " Vectric dimension(s) skipped - VCarve does not pass their points to gadgets." ..
             "\nFor dimensions in the PDF, draw lines on the dimension layer \"" .. dim_layer .. "\"" ..
             " (2 points = length, 3 points = angle).")
+  end
+  if straight_bez > 0 then
+    msg = msg .. "\n" .. straight_bez .. T(" gerade Kurve(n) als Linie erkannt (werden bemasst)",
+          " straight curve(s) recognised as lines (dimensioned)")
   end
   local other = skipped - skipped_dims
   if other > 0 then

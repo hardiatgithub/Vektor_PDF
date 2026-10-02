@@ -11,6 +11,12 @@ Neueste Version steht oben.
   im Ordner `release`. Die Version wird im Dialog, im Fenstertitel und in der Abschlussmeldung angezeigt.
 
 ### Verbessert
+- **Einzellinien werden bemaßt**: Eine einzelne gerade Linie bekommt bei „Maße jedes Vektors“ ihre Länge –
+  waagrecht und senkrecht wie die übrigen Einzelmaße, schräge Linien mit einem parallelen Maß daneben.
+- Neue Option **„Offene Polylinien: jedes gerade Stück“**: bemaßt bei offenen Polylinien jedes gerade Teilstück
+  (Bögen und Kurven werden ausgelassen; „Einzelmaße ab“ gilt für die Größe der ganzen Polylinie).
+- **Gerade Kurven** (Bézier-Stücke, deren Kontrollpunkte auf der Verbindungslinie liegen) werden wie Linien
+  behandelt: Sie werden bemaßt und bekommen Winkel an den Ecken.
 - **Winkelmaße übersichtlicher**: kleinere Maßbögen (4–10 mm, passend zur Schenkellänge); Zahlen weichen
   anderen Zahlen aus; gleiche Winkel dicht nebeneinander (z. B. Innen- und Außenkontur einer Doppellinie)
   werden bei „Winkel an Ecken“ nur einmal bemaßt.
