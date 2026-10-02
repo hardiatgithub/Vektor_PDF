@@ -34,6 +34,7 @@ local function ColorOps(index)                -- PDF-Operatoren fuer Strich- und
   return col .. " RG " .. col .. " rg"
 end
 local skipped = 0
+local skipped_dims = 0   -- davon Vectric-Bemassungen (CadLinearDimensioningObject usw.)
 local bezier_fallback = 0
 
 -- ------------------------------------------------------------------
@@ -337,6 +338,12 @@ local function AddObject(obj, contours, in_group, sheet)
     if iok then return end
   end
   skipped = skipped + 1
+  -- Vectric-Bemassungen erkennen: sie geben ueber die Gadget-Schnittstelle nur ihren
+  -- Umriss heraus, keine Punkte und keinen Masstext
+  local cok, cname = pcall(function() return obj.ClassName end)
+  if cok and type(cname) == "string" and cname:find("Dimension") then
+    skipped_dims = skipped_dims + 1
+  end
 end
 
 local function NormName(s)
@@ -912,6 +919,7 @@ function main(script_path)
 
   -- Konturen
   skipped = 0
+  skipped_dims = 0
   bezier_fallback = 0
   bezier_info = nil
   local sheet_list, active_id = JobSheets(job)
@@ -1333,11 +1341,19 @@ function main(script_path)
   if dim_each then
     msg = msg .. "\n(" .. n_group .. T(" davon in Gruppen - ohne Einzelmasse)", " of them in groups - no individual dimensions)")
   end
-  if skipped > 0 then
-    msg = msg .. "\n\n" .. skipped .. T(" Objekt(e) ohne Vektorform (Vectric-Text/-Bemassung)" ..
-          " wurden uebersprungen - Masse erzeugt das Gadget selbst.",
-          " object(s) without vector shape (Vectric text/dimensions)" ..
-          " were skipped - the gadget creates its own dimensions.")
+  if skipped_dims > 0 then
+    msg = msg .. "\n\n" .. skipped_dims ..
+          T(" Vectric-Bemassung(en) uebersprungen - VCarve gibt deren Punkte nicht an Gadgets weiter." ..
+            "\nFuer Masse im PDF bitte Linien auf den Mass-Layer \"" .. dim_layer .. "\" zeichnen" ..
+            " (2 Punkte = Laenge, 3 Punkte = Winkel).",
+            " Vectric dimension(s) skipped - VCarve does not pass their points to gadgets." ..
+            "\nFor dimensions in the PDF, draw lines on the dimension layer \"" .. dim_layer .. "\"" ..
+            " (2 points = length, 3 points = angle).")
+  end
+  local other = skipped - skipped_dims
+  if other > 0 then
+    msg = msg .. "\n\n" .. other .. T(" Objekt(e) ohne Vektorform (z. B. Vectric-Text) wurden uebersprungen.",
+          " object(s) without vector shape (e.g. Vectric text) were skipped.")
   end
   if bezier_fallback > 0 then
     msg = msg .. T("\n\nHinweis: ", "\n\nNote: ") .. bezier_fallback ..

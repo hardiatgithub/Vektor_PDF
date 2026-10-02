@@ -17,6 +17,8 @@ Neueste Version steht oben.
 - **Längenmaße mit Abstand**: Einzel- und Gesamtmaße, die sich überschneiden würden, werden automatisch
   in eigene Reihen nach außen versetzt – keine Maßlinie und keine Zahl liegt mehr auf einer anderen.
   Der Platz am Blattrand wird dafür automatisch vergrößert.
+- **Hinweis auf Vectric-Bemaßungen**: Die Abschlussmeldung zählt übersprungene Vectric-Bemaßungen getrennt
+  und erklärt, dass VCarve deren Punkte nicht an Gadgets weitergibt – Maße bitte als Linien auf dem Maß-Layer zeichnen.
 
 ### Behoben
 - Bei Jobs mit **mehreren Seiten (Sheets)** lagen alle Teile im PDF übereinander. Die Seiten werden jetzt
