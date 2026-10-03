@@ -5,6 +5,12 @@ Neueste Version steht oben.
 
 ## [Unveröffentlicht]
 
+### Neu (nach beta.4)
+- **Layer auswählen**: Unter „Welche Vektoren“ gibt es „Gewählte Layer“ mit einer Liste aller Layer zum Ankreuzen
+  (z. B. nur Layer 1 und 3). Auch ausgeblendete Layer können gewählt werden; die Auswahl wird gemerkt.
+  Der Maß-Layer folgt weiter seiner eigenen Einstellung. Interne Werkzeugweg-Layer von VCarve
+  (z. B. „Werkzeugweg-Vorschauen“) erscheinen nicht in der Liste.
+
 ### Geändert
 - **Release-Ablauf** (Beitrag von Gremlin): Entwicklungsdateien heißen jetzt `Vektor_PDF_dev.lua` /
   `Vektor_PDF_dev.htm`; `MakeRelease.ps1` setzt Version und Unterversion und erzeugt die `.vgadget`-Datei

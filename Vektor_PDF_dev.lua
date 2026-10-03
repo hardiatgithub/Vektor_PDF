@@ -437,7 +437,8 @@ local function ContoursToDimLines(list)
   return lines
 end
 
-local function CollectContours(job, selected_only, dim_layer)
+-- layer_filter: nil = alle sichtbaren Layer, sonst Tabelle { [NormName] = true } der gewaehlten Layer
+local function CollectContours(job, selected_only, dim_layer, layer_filter)
   local contours, dim_list = {}, {}
   local info = { names = {}, found = false, hidden = false }
   local dim_name = NormName(dim_layer)
@@ -453,7 +454,12 @@ local function CollectContours(job, selected_only, dim_layer)
       info.found = true
       if not layer.Visible then info.hidden = true end
     end
-    if layer.Visible and (is_dim or not selected_only) then
+    local use
+    if is_dim then use = layer.Visible                      -- Mass-Layer: eigene Regel (ausblenden)
+    elseif selected_only then use = false
+    elseif layer_filter then use = layer_filter[NormName(lname)] == true   -- auch ausgeblendete
+    else use = layer.Visible end
+    if use then
       local pos = layer:GetHeadPosition()
       while pos ~= nil do
         local obj
@@ -828,7 +834,42 @@ function main(script_path)
   AddNum("FontSize", 3.5)
   dialog:AddRadioGroup("ScaleMode", reg:GetInt("ScaleMode", 1))
   dialog:AddRadioGroup("Orient", reg:GetInt("Orient", 1))
-  dialog:AddRadioGroup("Source", job.Selection.IsEmpty and 2 or 1)
+  -- Quelle: 1 = Auswahl, 2 = alle sichtbaren Layer, 3 = gewaehlte Layer (wird gemerkt)
+  local src_def = job.Selection.IsEmpty and 2 or 1
+  if reg:GetInt("Source", 0) == 3 then src_def = 3 end
+  dialog:AddRadioGroup("Source", src_def)
+  -- Layerliste fuer die Auswahl im Dialog: "1:Name" (sichtbar) bzw. "0:Name" (ausgeblendet)
+  local layer_items = {}
+  pcall(function()
+    local lm = job.LayerManager
+    local lpos = lm:GetHeadPosition()
+    while lpos ~= nil do
+      local layer
+      layer, lpos = lm:GetNext(lpos)
+      local n = LayerName(layer)
+      -- interne Werkzeugweg-Layer von VCarve (z. B. "Werkzeugweg-Vorschauen") nicht anbieten:
+      -- sie enthalten nur Werkzeugweg-Objekte und keine Vektoren
+      local objs, tp = 0, 0
+      pcall(function()
+        local opos = layer:GetHeadPosition()
+        while opos ~= nil do
+          local obj
+          obj, opos = layer:GetNext(opos)
+          objs = objs + 1
+          local ok, cn = pcall(function() return obj.ClassName end)
+          if ok and type(cn) == "string" and cn:find("Toolpath") then tp = tp + 1 end
+        end
+      end)
+      local printable = not (objs > 0 and tp == objs)
+      local ln = n:lower()
+      if ln:find("werkzeugweg") or ln:find("toolpath") then printable = false end
+      if n ~= "" and printable then
+        layer_items[#layer_items + 1] = (layer.Visible and "1:" or "0:") .. n:gsub("|", "/")
+      end
+    end
+  end)
+  dialog:AddTextField("LayerList", table.concat(layer_items, "|"))
+  dialog:AddTextField("LayerSel", reg:GetString("LayerSel", ""))
   dialog:AddRadioGroup("SheetMode", reg:GetInt("SheetMode", 1))
   dialog:AddCheckBox("DrawBorder", reg:GetBool("DrawBorder", false))
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
@@ -884,7 +925,9 @@ function main(script_path)
   local font_mm     = GetNum("FontSize")
   local scale_mode  = dialog:GetRadioIndex("ScaleMode")      -- 1 = A4, 2 = 1:1
   local orient      = dialog:GetRadioIndex("Orient")         -- 1 = automatisch, 2 = hoch, 3 = quer
-  local selected_only = dialog:GetRadioIndex("Source") == 1
+  local source      = dialog:GetRadioIndex("Source")
+  local selected_only = source == 1
+  local layer_sel   = dialog:GetTextField("LayerSel") or ""
   local sheet_mode  = dialog:GetRadioIndex("SheetMode")     -- 1 = aktuelle Seite, 2 = alle Seiten
   local draw_border = dialog:GetCheckBox("DrawBorder")
   local dim_overall = dialog:GetCheckBox("DimOverall")
@@ -926,6 +969,21 @@ function main(script_path)
   reg:SetInt("DimColor", dim_color)
   reg:SetBool("ShowScale", show_scale)
   reg:SetString("Title", title)
+  reg:SetInt("Source", source)
+  reg:SetString("LayerSel", layer_sel)
+
+  -- gewaehlte Layer
+  local layer_filter, layer_count = nil, 0
+  if source == 3 then
+    layer_filter = {}
+    for n in (layer_sel .. "|"):gmatch("([^|]*)|") do
+      if n ~= "" then layer_filter[NormName(n)] = true; layer_count = layer_count + 1 end
+    end
+    if layer_count == 0 then
+      DisplayMessageBox(T("Bitte mindestens einen Layer ankreuzen.", "Please tick at least one layer."))
+      return false
+    end
+  end
 
   if line_mm <= 0 or font_mm <= 0 then
     DisplayMessageBox(T("Linienstaerke und Schriftgroesse muessen groesser als 0 sein.",
@@ -963,7 +1021,7 @@ function main(script_path)
   local sheet_list, active_id = JobSheets(job)
   known_sheets = sheet_list
   local active_key = SheetKey(active_id)
-  local contours, dim_lines, dim_info = CollectContours(job, selected_only, dim_layer)
+  local contours, dim_lines, dim_info = CollectContours(job, selected_only, dim_layer, layer_filter)
   if hide_dims then dim_lines = {} end      -- Hilfslinien bleiben trotzdem aus der Zeichnung
   if #contours == 0 then
     DisplayMessageBox(T("Keine Vektoren gefunden.", "No vectors found."))
@@ -1286,7 +1344,7 @@ function main(script_path)
     for _, sh in ipairs(sheet_list) do
       local okset = pcall(function() job.SheetManager.ActiveSheetId = sh.id end)
       if okset then
-        local c2, d2 = CollectContours(job, false, dim_layer)
+        local c2, d2 = CollectContours(job, false, dim_layer, layer_filter)
         per[#per + 1] = { sh = sh, contours = c2, dims = d2 }
         if #c2 ~= total then differs = true end
       end
@@ -1382,6 +1440,9 @@ function main(script_path)
     msg = msg .. "\n" .. #pages .. T(" Seiten (je VCarve-Seite eine PDF-Seite)", " pages (one PDF page per VCarve sheet)")
   elseif sheet_note then
     msg = msg .. "\n" .. sheet_note
+  end
+  if layer_filter then
+    msg = msg .. "\n" .. T("Layer: ", "Layers: ") .. layer_sel:gsub("|", ", ")
   end
   if sheet_diag then msg = msg .. sheet_diag end
   local n_group = 0

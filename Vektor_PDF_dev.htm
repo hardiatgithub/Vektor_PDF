@@ -38,6 +38,9 @@
   input.off { background: #e4e4e4; color: #999; border-color: #ccc; }
   input.ver { border: 0; background: transparent; color: #888; font-size: 0.79em; width: 10em; padding: 0; }
   .zoombox { float: left; font-size: 0.92em; }
+  .layers { margin: 0.2em 0 0.3em 1.6em; }
+  .layers label { white-space: nowrap; margin-right: 0.9em; }
+  .layers.dim { color: #999; }
 </style>
 </head>
 <body>
@@ -68,7 +71,10 @@
 <fieldset>
   <legend><span class="t" data-en="Which vectors">Welche Vektoren</span></legend>
   <label><input type="radio" name="Source" value="1"> <span class="t" data-en="Selected only">Nur ausgewählte</span></label>&nbsp;&nbsp;
-  <label><input type="radio" name="Source" value="2"> <span class="t" data-en="All visible layers">Alle sichtbaren Ebenen</span></label>
+  <label><input type="radio" name="Source" value="2"> <span class="t" data-en="All visible layers">Alle sichtbaren Ebenen</span></label>&nbsp;&nbsp;
+  <label><input type="radio" name="Source" value="3"> <span class="t" data-en="Chosen layers:">Gewählte Layer:</span></label>
+  <div id="LayerBox" class="layers"></div>
+  <input type="text" id="LayerList" style="display:none"><input type="text" id="LayerSel" style="display:none">
   <br><span class="t" data-en="Sheets:">Seiten:</span>&nbsp;
   <label><input type="radio" name="SheetMode" value="1"> <span class="t" data-en="Current sheet">Aktuelle Seite</span></label>&nbsp;&nbsp;
   <label><input type="radio" name="SheetMode" value="2"> <span class="t" data-en="All sheets (one PDF page each)">Alle Seiten (je eine PDF-Seite)</span></label>
@@ -280,7 +286,58 @@ function syncDimLayer() {
   tf.className = cb.checked ? "num off" : "num";
 }
 
-function syncAll() { syncLang(); syncDimLayer(); applyZoom(false); }
+// Layer-Auswahl: VCarve liefert die Liste in "LayerList" ("1:Name|0:Name", 0 = ausgeblendet),
+// die angekreuzten Namen stehen in "LayerSel" ("Name|Name") und werden von VCarve gelesen.
+var layersBuilt = false, layersTouched = false;
+function htmlEsc(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function buildLayers() {
+  var list = document.getElementById("LayerList");
+  var box = document.getElementById("LayerBox");
+  if (!list || !box || list.value == "") return;
+  if (!layersBuilt) {
+    layersBuilt = true;
+    var en = (currentLang() == "2");
+    var items = list.value.split("|");
+    var html = "";
+    for (var i = 0; i < items.length; i++) {
+      var vis = items[i].charAt(0) == "1";
+      var name = items[i].substring(2);
+      html += '<label><input type="checkbox" name="LayerChk" value="' + htmlEsc(name) +
+              '" onclick="saveLayers()"> ' + htmlEsc(name) +
+              (vis ? "" : ' <span class="t hint" data-de="(ausgeblendet)" data-en="(hidden)">' +
+                          (en ? "(hidden)" : "(ausgeblendet)") + '</span>') + '</label> ';
+    }
+    box.innerHTML = html;
+    applyZoom(true);                     // Dialog ist hoeher geworden
+  }
+  // bis der Benutzer klickt, Haekchen aus dem gespeicherten Wert uebernehmen
+  // (VCarve setzt die Feldwerte erst nach dem Laden)
+  if (!layersTouched) {
+    var sel = "|" + document.getElementById("LayerSel").value + "|";
+    var cb = document.getElementsByName("LayerChk");
+    for (var j = 0; j < cb.length; j++) cb[j].checked = sel.indexOf("|" + cb[j].value + "|") >= 0;
+  }
+}
+function saveLayers() {
+  layersTouched = true;
+  var cb = document.getElementsByName("LayerChk");
+  var out = [];
+  for (var i = 0; i < cb.length; i++) if (cb[i].checked) out.push(cb[i].value);
+  document.getElementById("LayerSel").value = out.join("|");
+  // Layer anklicken waehlt automatisch "Gewaehlte Layer"
+  var r = document.getElementsByName("Source");
+  for (var k = 0; k < r.length; k++) if (r[k].value == "3") r[k].checked = true;
+}
+function syncLayerBox() {
+  var r = document.getElementsByName("Source"), on = false;
+  for (var i = 0; i < r.length; i++) if (r[i].checked && r[i].value == "3") on = true;
+  var box = document.getElementById("LayerBox");
+  if (box) box.className = on ? "layers" : "layers dim";
+}
+
+function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); applyZoom(false); }
 
 window.onload = function () {
   reportScreen();
