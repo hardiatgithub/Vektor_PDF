@@ -1496,7 +1496,14 @@ function main(script_path)
   end
   local ok, err = WritePdf(fd.PathName, pages)
   if not ok then
-    DisplayMessageBox(T("PDF konnte nicht geschrieben werden:\n", "Could not write PDF:\n") .. tostring(err))
+    local hint = ""
+    if tostring(err):lower():find("permission") then
+      hint = T("\n\nDie Datei ist vermutlich noch in einem PDF-Programm geoeffnet (oder OneDrive synchronisiert sie gerade)."
+               .. "\nBitte das PDF schliessen oder einen anderen Dateinamen waehlen.",
+               "\n\nThe file is probably still open in a PDF viewer (or OneDrive is syncing it)."
+               .. "\nPlease close the PDF or choose a different file name.")
+    end
+    DisplayMessageBox(T("PDF konnte nicht geschrieben werden:\n", "Could not write PDF:\n") .. tostring(err) .. hint)
     return false
   end
 
