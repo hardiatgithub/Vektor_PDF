@@ -501,10 +501,11 @@ end
 -- ------------------------------------------------------------------
 local PDF_DIM_LAYER = "pdf_dim"     -- Layer fuer selbst gezeichnete Masslinien
 local snap_verts = nil              -- Fangpunkte aller Vektoren (einmal je Lauf)
+local snap_segs = nil               -- gerade Stuecke aller Vektoren (fuer schmale Masse)
 
 local function SnapVerts(job, in_mm)
   if snap_verts then return snap_verts end
-  snap_verts = {}
+  snap_verts, snap_segs = {}, {}
   pcall(function()
     local lm = job.LayerManager
     local lpos = lm:GetHeadPosition()
@@ -526,9 +527,14 @@ local function SnapVerts(job, in_mm)
             pcall(function()
               -- Punkte entlang des Vektors (auch auf Boegen, z. B. Kreis-Tangentenpunkte)
               local p = ContourToPath(c, in_mm and 1.0 or 0.04)
+              local sx, sy, lx, ly
               for _, cmd in ipairs(p.cmds) do
                 if cmd[1] == "m" or cmd[1] == "l" then snap_verts[#snap_verts + 1] = { cmd[2], cmd[3] }
                 elseif cmd[1] == "c" then snap_verts[#snap_verts + 1] = { cmd[6], cmd[7] } end
+                if cmd[1] == "m" then sx, sy, lx, ly = cmd[2], cmd[3], cmd[2], cmd[3]
+                elseif cmd[1] == "l" then snap_segs[#snap_segs + 1] = { lx, ly, cmd[2], cmd[3] }; lx, ly = cmd[2], cmd[3]
+                elseif cmd[1] == "c" then snap_segs[#snap_segs + 1] = { lx, ly, cmd[6], cmd[7] }; lx, ly = cmd[6], cmd[7]
+                elseif cmd[1] == "h" and sx then snap_segs[#snap_segs + 1] = { lx, ly, sx, sy } end
               end
             end)
           else
@@ -551,7 +557,7 @@ local function SnapVerts(job, in_mm)
   return snap_verts
 end
 
-local function VectricDimLine(job, obj, in_mm)
+local function VectricDimLine(job, obj, in_mm, known_k)
   local verts = SnapVerts(job, in_mm)
   local tol = in_mm and 1.0 or 0.04                -- Fangbereich
   local okb, box = pcall(function() return obj:GetBoundingBox() end)
@@ -577,7 +583,77 @@ local function VectricDimLine(job, obj, in_mm)
   local vs = (vo0 and 1 or 0) + (vo1 and 1 or 0)
   local horiz
   if hs ~= vs then horiz = hs > vs else horiz = w >= h end
-  if (horiz and hs < 2) or (not horiz and vs < 2) then return nil end   -- z. B. schraeges Mass
+  if (horiz and hs < 2) or (not horiz and vs < 2) then
+    -- Schmales Mass (Pfeile aussen, Zahl daneben), z. B. Nutbreite: Die Masslinie liegt quer
+    -- zwischen zwei Kanten. Eine Linie quer durch den Rahmen schneidet die Kanten ("cuts").
+    -- Die Pfeile ragen auf beiden Seiten gleich weit (k) ueber die Kanten hinaus; steht die
+    -- Zahl in Messrichtung daneben, ist nur eine Seite um k ueberstehend (k aus anderen Massen).
+    local function Cuts(hz, c, lo, hi)
+      local cuts = {}
+      for _, sg in ipairs(snap_segs or {}) do
+        local a1, b1, a2, b2                        -- a = Messrichtung, b = quer
+        if hz then a1, b1, a2, b2 = sg[1], sg[2], sg[3], sg[4] else a1, b1, a2, b2 = sg[2], sg[1], sg[4], sg[3] end
+        -- nur Kanten quer zur Messrichtung (fast senkrecht dazu), keine schraegen
+        if (b1 - c) * (b2 - c) <= 0 and math.abs(b2 - b1) > 1e-9 and math.abs(a2 - a1) <= 0.2 * math.abs(b2 - b1) then
+          local a = a1 + (a2 - a1) * (c - b1) / (b2 - b1)
+          if a > lo and a < hi then
+            local dup = false
+            for _, q in ipairs(cuts) do if math.abs(q - a) < tol * 0.1 then dup = true end end
+            if not dup then cuts[#cuts + 1] = a end
+          end
+        end
+      end
+      table.sort(cuts)
+      return cuts
+    end
+    local eps = tol * 0.3
+    local function Make(hz, ca, cb, c, lo2, hi2, side)
+      -- Lage quer: bei Zahl seitlich die Rahmenkante, an der beide Kanten wirklich vorhanden sind
+      if side then
+        local function has(cc)
+          local n = 0
+          for _, q in ipairs(Cuts(hz, cc, (hz and x0 or y0), (hz and x1 or y1))) do
+            if math.abs(q - ca) < eps or math.abs(q - cb) < eps then n = n + 1 end
+          end
+          return n >= 2
+        end
+        local m = 0.03 * (hi2 - lo2)
+        if has(hi2 - m) and not has(lo2 + m) then c = hi2 - m
+        elseif has(lo2 + m) and not has(hi2 - m) then c = lo2 + m end
+      end
+      if hz then return { ca, c, cb, c } else return { c, ca, c, cb } end
+    end
+    -- 1) Zahl seitlich: Ueberstand auf beiden Seiten gleich
+    for _, hz in ipairs({ true, false }) do
+      local lo, hi = hz and x0 or y0, hz and x1 or y1
+      local qlo, qhi = hz and y0 or x0, hz and y1 or x1
+      local cuts = Cuts(hz, (qlo + qhi) / 2, lo, hi)
+      for i = 1, #cuts - 1 do
+        local d1, d2 = cuts[i] - lo, hi - cuts[i + 1]
+        if d1 > eps and math.abs(d1 - d2) < eps then
+          return Make(hz, cuts[i], cuts[i + 1], (qlo + qhi) / 2, qlo, qhi, true), d1
+        end
+      end
+    end
+    -- 2) Zahl in Messrichtung daneben: eine Seite steht um k ueber (k aus anderen Massen)
+    if known_k then
+      for _, hz in ipairs({ true, false }) do
+        local lo, hi = hz and x0 or y0, hz and x1 or y1
+        local qlo, qhi = hz and y0 or x0, hz and y1 or x1
+        local c = (qlo + qhi) / 2
+        local cuts = Cuts(hz, c, lo, hi)
+        for i = 1, #cuts do
+          if i < #cuts and math.abs(cuts[i] - lo - known_k) < eps then
+            return Make(hz, cuts[i], cuts[i + 1], c), nil
+          end
+          if i > 1 and math.abs(hi - cuts[i] - known_k) < eps then
+            return Make(hz, cuts[i - 1], cuts[i], c), nil
+          end
+        end
+      end
+    end
+    return nil
+  end
   -- Masslinie fast am aeusseren Rand des Rahmens (weiter weg vom Bauteil)
   if horiz then
     local oy = (ho0 + ho1) / 2
@@ -669,8 +745,22 @@ local function CollectContours(job, selected_only, dim_layer, layer_filter)
     contours = keep
   end
   -- Vectric-Bemassungen der gedruckten Layer bzw. der Auswahl als Masslinien
+  -- 1. Durchgang: eindeutige Masse; dabei den Pfeil-Ueberstand k schmaler Masse lernen
+  local open, known_k = {}, nil
   for _, vd in ipairs(vdims) do
-    local l = VectricDimLine(job, vd.obj, job.InMM)
+    local l, k = VectricDimLine(job, vd.obj, job.InMM, nil)
+    if k and not known_k then known_k = k end
+    if l then
+      l.sheet = vd.sheet
+      dim_lines[#dim_lines + 1] = l
+      vdim_ok = vdim_ok + 1
+    else
+      open[#open + 1] = vd
+    end
+  end
+  -- 2. Durchgang: schmale Masse mit der Zahl in Messrichtung (brauchen k)
+  for _, vd in ipairs(open) do
+    local l = known_k and VectricDimLine(job, vd.obj, job.InMM, known_k) or nil
     if l then
       l.sheet = vd.sheet
       dim_lines[#dim_lines + 1] = l
@@ -732,10 +822,24 @@ function Draw:text(x, y, str, size, rotated, align)
   end
 end
 -- waagrechtes Mass: von xa bis xb, Bezugskante yref, Masslinie bei yline (darunter)
+-- Mass zu kurz fuer Pfeile und Zahl innen? (dann wie bei Vectric: Pfeile von aussen,
+-- Zahl daneben mit verlaengerter Masslinie)
+function Draw:narrow(len, label)
+  return len < 2 * self.arrow + TextWidth(label, self.fs) + 2 * MM
+end
 function Draw:hdim(xa, xb, yref, yline, label)
   local gap, over = EXT_GAP, 1.5 * MM
   self:line(xa, yref - gap, xa, yline - over)
   self:line(xb, yref - gap, xb, yline - over)
+  if self:narrow(xb - xa, label) then
+    local e = self.arrow + 2 * MM
+    local tx = xa - e - 1 * MM                       -- Zahl links daneben
+    self:line(tx, yline, xb + e, yline)
+    self:arrowhead(xa, yline, 1, 0)
+    self:arrowhead(xb, yline, -1, 0)
+    self:text(tx - 0.5 * MM, yline - self.fs * 0.35, label, nil, false, "right")
+    return
+  end
   self:line(xa, yline, xb, yline)
   self:arrowhead(xa, yline, -1, 0)
   self:arrowhead(xb, yline, 1, 0)
@@ -760,7 +864,7 @@ function Draw:alignedDim(x1, y1, x2, y2, label)
   local tick = 1.5 * MM
   self:line(x1 - nx * tick, y1 - ny * tick, x1 + nx * tick, y1 + ny * tick)
   self:line(x2 - nx * tick, y2 - ny * tick, x2 + nx * tick, y2 + ny * tick)
-  if len > 2.5 * self.arrow then
+  if not self:narrow(len, label) then
     self:line(x1, y1, x2, y2)
     self:arrowhead(x1, y1, -ux, -uy)
     self:arrowhead(x2, y2, ux, uy)
@@ -769,6 +873,21 @@ function Draw:alignedDim(x1, y1, x2, y2, label)
     self:line(x1 - ux * e, y1 - uy * e, x2 + ux * e, y2 + uy * e)
     self:arrowhead(x1, y1, ux, uy)
     self:arrowhead(x2, y2, -ux, -uy)
+  end
+  if self:narrow(len, label) then              -- Zahl passt nicht dazwischen: daneben (wie Vectric)
+    local tw = TextWidth(label, self.fs)
+    local e = self.arrow + 2 * MM
+    -- auf der Seite, die beim Lesen links bzw. unten liegt
+    local sx, sy, sgn = x1, y1, -1
+    if ux < -1e-6 or (math.abs(ux) <= 1e-6 and uy < 0) then sx, sy, sgn = x2, y2, 1 end
+    local ex, ey = sx + sgn * ux * (e + 1 * MM), sy + sgn * uy * (e + 1 * MM)
+    self:line(sx + sgn * ux * e, sy + sgn * uy * e, ex, ey)
+    local ang = atan2(uy, ux)
+    if ang > math.pi / 2 + 1e-6 or ang <= -math.pi / 2 + 1e-6 then ang = ang + math.pi end
+    local cx, cy = ex + sgn * ux * (tw / 2 + 0.5 * MM), ey + sgn * uy * (tw / 2 + 0.5 * MM)
+    local tnx, tny = -math.sin(ang), math.cos(ang)
+    self:textAngle(cx - tnx * self.fs * 0.35, cy - tny * self.fs * 0.35, label, ang)
+    return
   end
   local ang = atan2(uy, ux)
   if ang > math.pi / 2 + 1e-6 or ang <= -math.pi / 2 + 1e-6 then   -- Text lesbar halten
@@ -867,6 +986,15 @@ function Draw:vdim(ya, yb, xref, xline, label)
   local gap, over = EXT_GAP, 1.5 * MM
   self:line(xref - gap, ya, xline - over, ya)
   self:line(xref - gap, yb, xline - over, yb)
+  if self:narrow(yb - ya, label) then
+    local e = self.arrow + 2 * MM
+    local ty = ya - e - 1 * MM                       -- Zahl unten daneben
+    self:line(xline, ty, xline, yb + e)
+    self:arrowhead(xline, ya, 0, 1)
+    self:arrowhead(xline, yb, 0, -1)
+    self:text(xline + self.fs * 0.35, ty - 0.5 * MM, label, nil, true, "right")
+    return
+  end
   self:line(xline, ya, xline, yb)
   self:arrowhead(xline, ya, 0, -1)
   self:arrowhead(xline, yb, 0, 1)
@@ -1206,7 +1334,7 @@ function main(script_path)
   -- Konturen
   skipped = 0
   skipped_dims = 0
-  vdim_ok, vdim_unsure, snap_verts = 0, 0, nil
+  vdim_ok, vdim_unsure, snap_verts, snap_segs = 0, 0, nil, nil
   layer_color_ok, layer_color_fail, layer_color_diag = 0, 0, nil
   straight_bez = 0
   bezier_fallback = 0
@@ -1297,8 +1425,14 @@ function main(script_path)
     local lane = fs + 2.5 * MM           -- Abstand zwischen zwei Masslinien
     local function PlanDims()
       local hs, vs, cs, ls = {}, {}, {}, {}
+      local arrow_pt = (arrow_mm and arrow_mm > 0) and arrow_mm * MM or 2.5 * MM
       local function item(a, b, ref, line, label)
         local tw, mid = TextWidth(label, fs), (a + b) / 2
+        if b - a < 2 * arrow_pt + tw + 2 * MM then     -- schmal: Pfeile aussen, Zahl links/unten daneben
+          local e = arrow_pt + 2 * MM
+          return { a = a, b = b, ref = ref, line = line, label = label,
+                   lo = a - e - 1.5 * MM - tw - 1 * MM, hi = b + e + 1 * MM }
+        end
         return { a = a, b = b, ref = ref, line = line, label = label,
                  lo = math.min(a, mid - tw / 2) - 1 * MM, hi = math.max(b, mid + tw / 2) + 1 * MM }
       end

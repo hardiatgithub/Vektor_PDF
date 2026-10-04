@@ -27,6 +27,9 @@ Neueste Version steht oben.
   Interne Werkzeugweg-Layer von VCarve (z. B. „Werkzeugweg-Vorschauen“) erscheinen nicht in der Liste.
 - **Layerfarbe**: Jede Linie wird automatisch in der Farbe ihres VCarve-Layers gedruckt; die Farbauswahl
   für die Linien entfällt (die Farbe der Bemaßung bleibt einstellbar). Sehr helle Farben/Weiß werden grau gedruckt.
+- **Kleine Maße wie bei Vectric**: Passen Pfeile und Zahl nicht zwischen die Hilfslinien, zeigen die Pfeile von
+  außen nach innen und die Zahl steht links (bzw. unten) daneben an der verlängerten Maßlinie.
+  Auch solche schmalen Vectric-Bemaßungen (z. B. Nutbreite 8 mm zwischen zwei Linien) werden jetzt erkannt.
 - Hinweis, wenn das PDF nicht geschrieben werden kann, weil es noch geöffnet ist.
 
 ### Geändert

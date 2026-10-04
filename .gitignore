@@ -16,3 +16,6 @@ desktop.ini
 .DS_Store
 *.vgadget
 ._*
+
+# Diagnose-Ausgaben
+*_diag.txt
