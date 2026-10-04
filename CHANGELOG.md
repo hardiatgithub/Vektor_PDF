@@ -27,6 +27,8 @@ Neueste Version steht oben.
 - **Kleine Maße wie bei Vectric**: Passen Pfeile und Zahl nicht zwischen die Hilfslinien, zeigen die Pfeile von
   außen nach innen und die Zahl steht links (bzw. unten) daneben an der verlängerten Maßlinie.
   Auch solche schmalen Vectric-Bemaßungen (z. B. Nutbreite 8 mm zwischen zwei Linien) werden jetzt erkannt.
+- **Beschriftungen überlappen nicht mehr**: Radien an konzentrischen Bögen weichen entlang des Bogens
+  seitlich aus (sonst gestaffelte Hinweislinien), gleiche Bögen werden nur einmal beschriftet; Zahlen schräger Maße weichen entlang der Maßlinie aus (z. B. bei sich kreuzenden Diagonalen).
 - Hinweis, wenn das PDF nicht geschrieben werden kann, weil es noch geöffnet ist.
 
 ### Geändert

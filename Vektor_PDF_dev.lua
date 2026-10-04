@@ -213,8 +213,10 @@ local function ArcInfo(x1, y1, x2, y2, bulge)
   local off = c * (1 - bulge * bulge) / (4 * bulge)
   local cx, cy = mx + lx * off, my + ly * off
   local r = math.sqrt((x1 - cx) ^ 2 + (y1 - cy) ^ 2)
-  local am = atan2(y1 - cy, x1 - cx) + 2 * math.atan(bulge)   -- halber Bogenwinkel
-  return { cx = cx, cy = cy, r = r, px = cx + r * math.cos(am), py = cy + r * math.sin(am) }
+  local sa = atan2(y1 - cy, x1 - cx)
+  local am = sa + 2 * math.atan(bulge)                         -- halber Bogenwinkel
+  return { cx = cx, cy = cy, r = r, px = cx + r * math.cos(am), py = cy + r * math.sin(am),
+           sa = sa, sw = 4 * math.atan(bulge) }                -- Startwinkel, Bogenwinkel
 end
 
 -- Ecken zwischen zwei aufeinanderfolgenden Geraden -> { {vx,vy,ax,ay,bx,by,deg}, ... }
@@ -862,11 +864,30 @@ function Draw:hdim(xa, xb, yref, yline, label)
   self:text((xa + xb) / 2, yline + 1 * MM, label)
 end
 -- Text entlang einer Richtung (Winkel in Bogenmass), mittig bei x,y
+-- Flaeche eines gedrehten Textes (achsparalleler Rahmen um die gedrehte Schrift)
+function Draw:angleBox(x, y, str, ang)
+  local size = self.fs
+  local w = TextWidth(str, size)
+  local c, s = math.cos(ang), math.sin(ang)
+  local x0, y0 = x - c * w / 2, y - s * w / 2
+  local xs, ys = {}, {}
+  for _, p in ipairs({ { 0, -0.25 * size }, { w, -0.25 * size }, { 0, 0.8 * size }, { w, 0.8 * size } }) do
+    xs[#xs + 1] = x0 + c * p[1] - s * p[2]
+    ys[#ys + 1] = y0 + s * p[1] + c * p[2]
+  end
+  local b = { xs[1], ys[1], xs[1], ys[1] }
+  for i = 2, 4 do
+    b[1] = math.min(b[1], xs[i]); b[2] = math.min(b[2], ys[i])
+    b[3] = math.max(b[3], xs[i]); b[4] = math.max(b[4], ys[i])
+  end
+  return b
+end
 function Draw:textAngle(x, y, str, ang)
   local size = self.fs
   local w = TextWidth(str, size)
   local c, s = math.cos(ang), math.sin(ang)
   local x0, y0 = x - c * w / 2, y - s * w / 2
+  self.boxes[#self.boxes + 1] = self:angleBox(x, y, str, ang)
   self:add("BT /F1 " .. f(size) .. " Tf " .. f(c) .. " " .. f(s) .. " " .. f(-s) .. " " .. f(c) ..
            " " .. f(x0) .. " " .. f(y0) .. " Tm " .. PdfStr(str) .. " Tj ET")
 end
@@ -910,7 +931,13 @@ function Draw:alignedDim(x1, y1, x2, y2, label)
     ang = ang + math.pi
   end
   local tnx, tny = -math.sin(ang), math.cos(ang)   -- "oberhalb" des Textes
-  local mx, my = (x1 + x2) / 2 + tnx * 1 * MM, (y1 + y2) / 2 + tny * 1 * MM
+  -- Zahl moeglichst mittig; liegt dort schon eine andere Zahl, entlang der Linie ausweichen
+  local mx, my
+  for _, t in ipairs({ 0.5, 0.35, 0.65, 0.25, 0.75, 0.15, 0.85 }) do
+    local cx, cy = x1 + dx * t + tnx * 1 * MM, y1 + dy * t + tny * 1 * MM
+    if mx == nil then mx, my = cx, cy end
+    if self:boxFree(self:angleBox(cx, cy, label, ang)) then mx, my = cx, cy; break end
+  end
   self:textAngle(mx, my, label, ang)
 end
 -- Mass parallel zu einer schraegen Linie, um 'off' nach unten/links versetzt, mit Hilfslinien
@@ -983,19 +1010,42 @@ function Draw:angleDim(vx, vy, ax, ay, bx, by, label)
   self:text(px, py, label)
 end
 -- Radius: Pfeil von aussen auf den Bogen (Punkt px,py), Mittelpunkt cx,cy
-function Draw:radius(cx, cy, px, py, label)
-  local dx, dy = px - cx, py - cy
-  local len = math.sqrt(dx * dx + dy * dy)
-  if len < 1e-6 then return end
-  dx, dy = dx / len, dy / len
-  local ox, oy = px + dx * 6 * MM, py + dy * 6 * MM           -- Ende der Hinweislinie
-  local side = (dx >= 0) and 1 or -1
-  local sx = ox + side * 2 * MM                                -- kurzer waagrechter Absatz
-  self:line(px, py, ox, oy)
-  self:line(ox, oy, sx, oy)
-  self:arrowhead(px, py, -dx, -dy)
-  self:text(sx + side * 0.8 * MM, oy - self.fs * 0.35, label, nil, false,
-            side > 0 and "left" or "right")
+function Draw:radius(cx, cy, px, py, label, sa, sw)
+  local function place(qx, qy, l)
+    local dx, dy = qx - cx, qy - cy
+    local len = math.sqrt(dx * dx + dy * dy)
+    if len < 1e-6 then return nil end
+    dx, dy = dx / len, dy / len
+    local side = (dx >= 0) and 1 or -1
+    local align = side > 0 and "left" or "right"
+    local ox, oy = qx + dx * l, qy + dy * l
+    local sx = ox + side * 2 * MM
+    local tx, ty = sx + side * 0.8 * MM, oy - self.fs * 0.35
+    return { qx = qx, qy = qy, dx = dx, dy = dy, ox = ox, oy = oy, sx = sx, tx = tx, ty = ty, align = align,
+             free = self:boxFree(TextBox(tx, ty, label, self.fs, false, align)) }
+  end
+  local best = place(px, py, 6 * MM)
+  if not best then return end
+  if not best.free and sa and sw then
+    -- 1) entlang des Bogens seitlich ausweichen (gleiche kurze Hinweislinie)
+    local r = math.sqrt((px - cx) ^ 2 + (py - cy) ^ 2)
+    for _, t in ipairs({ 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.12, 0.88 }) do
+      local a = sa + sw * t
+      local c = place(cx + r * math.cos(a), cy + r * math.sin(a), 6 * MM)
+      if c and c.free then best = c; break end
+    end
+  end
+  if not best.free then
+    -- 2) sonst die Hinweislinie verlaengern (Beschriftungen staffeln sich nach aussen)
+    for step = 1, 8 do
+      local c = place(px, py, 6 * MM + step * self.fs * 1.3)
+      if c and c.free then best = c; break end
+    end
+  end
+  self:line(best.qx, best.qy, best.ox, best.oy)
+  self:line(best.ox, best.oy, best.sx, best.oy)
+  self:arrowhead(best.qx, best.qy, -best.dx, -best.dy)
+  self:text(best.tx, best.ty, label, nil, false, best.align)
 end
 -- senkrechtes Mass: von ya bis yb, Bezugskante xref, Masslinie bei xline (links)
 function Draw:vdim(ya, yb, xref, xline, label)
@@ -1676,6 +1726,7 @@ function main(script_path)
     if dim_radius then
       local tol = in_mm and 0.05 or 0.002
       local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4
+      local all_done = {}                  -- gleicher Bogen (Mittelpunkt + Radius) nur einmal
       for _, p in ipairs(paths) do
         local pw, ph = p.maxx - p.minx, p.maxy - p.miny
         local is_circle = p.closed and p.all_arcs and pw > tol and math.abs(pw - ph) < 0.01 * pw
@@ -1684,9 +1735,13 @@ function main(script_path)
           for _, a in ipairs(p.arcs) do
             local seen = false
             for _, r in ipairs(done) do if math.abs(r - a.r) < tol then seen = true end end
+            for _, q in ipairs(all_done) do
+              if math.abs(q.r - a.r) < tol and math.abs(q.cx - a.cx) < tol and math.abs(q.cy - a.cy) < tol then seen = true end
+            end
             if not seen and a.r > tol then
               done[#done + 1] = a.r
-              d:radius(tx(a.cx), ty(a.cy), tx(a.px), ty(a.py), "R " .. fmt(a.r))
+              all_done[#all_done + 1] = a
+              d:radius(tx(a.cx), ty(a.cy), tx(a.px), ty(a.py), "R " .. fmt(a.r), a.sa, a.sw)
             end
           end
         end
