@@ -20,6 +20,7 @@ end
 
 local atan2 = math.atan2 or math.atan
 local MM = 72 / 25.4            -- Punkte je mm (PDF-Einheit)
+local EXT_GAP = 2 * MM          -- Abstand der Masshilfslinien zum Bauteil
 -- Farbauswahl im Dialog (Index 1..5) -> RGB 0..1
 local COLORS = {
   { 0, 0, 0 },          -- schwarz
@@ -34,6 +35,9 @@ local function ColorOps(index)                -- PDF-Operatoren fuer Strich- und
   return col .. " RG " .. col .. " rg"
 end
 local skipped = 0
+local vdims = {}                    -- gesammelte Vectric-Bemassungen { obj, sheet }
+local vdim_ok, vdim_unsure = 0, 0
+local use_vdims = true              -- Schalter "Vectric-Bemassung": Masse auch aus ausgeblendeten Layern
 local layer_colors = {}                          -- Layer-Id -> Farbe (fuer "Nur ausgewaehlte")
 local layer_color_ok, layer_color_fail = 0, 0   -- Layerfarben gelesen / nicht lesbar
 local layer_color_diag = nil
@@ -413,7 +417,8 @@ local function AddObject(obj, contours, in_group, sheet, color)
   -- Umriss heraus, keine Punkte und keinen Masstext
   local cok, cname = pcall(function() return obj.ClassName end)
   if cok and type(cname) == "string" and cname:find("Dimension") then
-    skipped_dims = skipped_dims + 1
+    skipped = skipped - 1                          -- wird als Mass uebernommen
+    vdims[#vdims + 1] = { obj = obj, sheet = sheet }
   end
 end
 
@@ -486,9 +491,110 @@ local function ContoursToDimLines(list)
   return lines
 end
 
+
+-- ------------------------------------------------------------------
+-- Vectric-Bemassungen fuer das PDF in Masslinien umrechnen (nur im Speicher,
+-- an der Zeichnung in VCarve wird nichts geaendert).
+-- VCarve gibt von einer Bemassung nur den Umriss-Rahmen heraus. Daraus wird eine
+-- waagrechte bzw. senkrechte Masslinie abgeleitet, deren Enden auf das Bauteil fangen.
+-- Schraege oder unsichere Bemassungen werden ausgelassen.
+-- ------------------------------------------------------------------
+local PDF_DIM_LAYER = "pdf_dim"     -- Layer fuer selbst gezeichnete Masslinien
+local snap_verts = nil              -- Fangpunkte aller Vektoren (einmal je Lauf)
+
+local function SnapVerts(job, in_mm)
+  if snap_verts then return snap_verts end
+  snap_verts = {}
+  pcall(function()
+    local lm = job.LayerManager
+    local lpos = lm:GetHeadPosition()
+    while lpos ~= nil do
+      local layer
+      layer, lpos = lm:GetNext(lpos)
+      if NormName(LayerName(layer)) ~= NormName(PDF_DIM_LAYER) then
+        local stack = {}
+        local pos = layer:GetHeadPosition()
+        while pos ~= nil do
+          local obj
+          obj, pos = layer:GetNext(pos)
+          stack[#stack + 1] = obj
+        end
+        while #stack > 0 do
+          local obj = table.remove(stack)
+          local ok, c = pcall(function() return obj:GetContour() end)
+          if ok and c ~= nil then
+            pcall(function()
+              -- Punkte entlang des Vektors (auch auf Boegen, z. B. Kreis-Tangentenpunkte)
+              local p = ContourToPath(c, in_mm and 1.0 or 0.04)
+              for _, cmd in ipairs(p.cmds) do
+                if cmd[1] == "m" or cmd[1] == "l" then snap_verts[#snap_verts + 1] = { cmd[2], cmd[3] }
+                elseif cmd[1] == "c" then snap_verts[#snap_verts + 1] = { cmd[6], cmd[7] } end
+              end
+            end)
+          else
+            pcall(function()
+              local g = CastCadObjectToCadObjectGroup(obj)
+              if g then
+                local gp = g:GetHeadPosition()
+                while gp ~= nil do
+                  local ch
+                  ch, gp = g:GetNext(gp)
+                  stack[#stack + 1] = ch
+                end
+              end
+            end)
+          end
+        end
+      end
+    end
+  end)
+  return snap_verts
+end
+
+local function VectricDimLine(job, obj, in_mm)
+  local verts = SnapVerts(job, in_mm)
+  local tol = in_mm and 1.0 or 0.04                -- Fangbereich
+  local okb, box = pcall(function() return obj:GetBoundingBox() end)
+  if not okb or box == nil then return nil end
+  local x0, y0, x1, y1 = box.MinX, box.MinY, box.MaxX, box.MaxY
+  local w, h = x1 - x0, y1 - y0
+  local function Snap(v, ax, lo, hi)
+    local best, bd, other = v, tol, nil
+    for _, q in ipairs(verts) do
+      local o = q[3 - ax]
+      if o >= lo and o <= hi then
+        local dd = math.abs(q[ax] - v)
+        if dd < bd then best, bd, other = q[ax], dd, o end
+      end
+    end
+    return best, other
+  end
+  local hx0, ho0 = Snap(x0, 1, y0 - 2 * h, y1 + 2 * h)
+  local hx1, ho1 = Snap(x1, 1, y0 - 2 * h, y1 + 2 * h)
+  local vy0, vo0 = Snap(y0, 2, x0 - 2 * w, x1 + 2 * w)
+  local vy1, vo1 = Snap(y1, 2, x0 - 2 * w, x1 + 2 * w)
+  local hs = (ho0 and 1 or 0) + (ho1 and 1 or 0)
+  local vs = (vo0 and 1 or 0) + (vo1 and 1 or 0)
+  local horiz
+  if hs ~= vs then horiz = hs > vs else horiz = w >= h end
+  if (horiz and hs < 2) or (not horiz and vs < 2) then return nil end   -- z. B. schraeges Mass
+  -- Masslinie fast am aeusseren Rand des Rahmens (weiter weg vom Bauteil)
+  if horiz then
+    local oy = (ho0 + ho1) / 2
+    local y = (math.abs(y1 - oy) > math.abs(y0 - oy)) and (y1 - 0.08 * h) or (y0 + 0.08 * h)
+    return { hx0, y, hx1, y }
+  else
+    local ox = (vo0 + vo1) / 2
+    local x = (math.abs(x1 - ox) > math.abs(x0 - ox)) and (x1 - 0.08 * w) or (x0 + 0.08 * w)
+    return { x, vy0, x, vy1 }
+  end
+end
+
 -- layer_filter: nil = alle sichtbaren Layer, sonst Tabelle { [NormName] = true } der gewaehlten Layer
 local function CollectContours(job, selected_only, dim_layer, layer_filter)
   layer_colors = {}
+  vdims = {}
+  vdim_ok, vdim_unsure = 0, 0
   local contours, dim_list = {}, {}
   local info = { names = {}, found = false, hidden = false }
   local dim_name = NormName(dim_layer)
@@ -505,7 +611,7 @@ local function CollectContours(job, selected_only, dim_layer, layer_filter)
       if not layer.Visible then info.hidden = true end
     end
     local use
-    if is_dim then use = layer.Visible                      -- Mass-Layer: eigene Regel (ausblenden)
+    if is_dim then use = layer.Visible or use_vdims   -- Mass-Layer pdf_dim: Schalter an = immer
     elseif selected_only then use = false
     elseif layer_filter then use = layer_filter[NormName(lname)] == true   -- auch ausgeblendete
     else use = layer.Visible end
@@ -521,6 +627,17 @@ local function CollectContours(job, selected_only, dim_layer, layer_filter)
         local obj
         obj, pos = layer:GetNext(pos)
         AddObject(obj, is_dim and dim_list or contours, nil, nil, lcol)
+      end
+    elseif use_vdims and not selected_only then
+      -- Layer wird nicht gedruckt (ausgeblendet / nicht gewaehlt): nur seine Vectric-Bemassungen
+      local pos = layer:GetHeadPosition()
+      while pos ~= nil do
+        local obj
+        obj, pos = layer:GetNext(pos)
+        local okc, cn = pcall(function() return obj.ClassName end)
+        if okc and type(cn) == "string" and cn:find("Dimension") then
+          vdims[#vdims + 1] = { obj = obj, sheet = ObjSheet(obj) }
+        end
       end
     end
   end
@@ -550,6 +667,17 @@ local function CollectContours(job, selected_only, dim_layer, layer_filter)
       if not dup then keep[#keep + 1] = c end
     end
     contours = keep
+  end
+  -- Vectric-Bemassungen der gedruckten Layer bzw. der Auswahl als Masslinien
+  for _, vd in ipairs(vdims) do
+    local l = VectricDimLine(job, vd.obj, job.InMM)
+    if l then
+      l.sheet = vd.sheet
+      dim_lines[#dim_lines + 1] = l
+      vdim_ok = vdim_ok + 1
+    else
+      vdim_unsure = vdim_unsure + 1
+    end
   end
   return contours, dim_lines, info
 end
@@ -605,7 +733,7 @@ function Draw:text(x, y, str, size, rotated, align)
 end
 -- waagrechtes Mass: von xa bis xb, Bezugskante yref, Masslinie bei yline (darunter)
 function Draw:hdim(xa, xb, yref, yline, label)
-  local gap, over = 1 * MM, 1.5 * MM
+  local gap, over = EXT_GAP, 1.5 * MM
   self:line(xa, yref - gap, xa, yline - over)
   self:line(xb, yref - gap, xb, yline - over)
   self:line(xa, yline, xb, yline)
@@ -657,7 +785,7 @@ function Draw:offsetDim(x1, y1, x2, y2, label, off)
   if len < 1e-6 then return end
   local nx, ny = -dy / len, dx / len
   if ny > 1e-9 or (math.abs(ny) <= 1e-9 and nx > 0) then nx, ny = -nx, -ny end   -- nach unten/links
-  local gap, over = 1 * MM, 1.5 * MM
+  local gap, over = EXT_GAP, 1.5 * MM
   self:line(x1 + nx * gap, y1 + ny * gap, x1 + nx * (off + over), y1 + ny * (off + over))
   self:line(x2 + nx * gap, y2 + ny * gap, x2 + nx * (off + over), y2 + ny * (off + over))
   self:alignedDim(x1 + nx * off, y1 + ny * off, x2 + nx * off, y2 + ny * off, label)
@@ -736,7 +864,7 @@ function Draw:radius(cx, cy, px, py, label)
 end
 -- senkrechtes Mass: von ya bis yb, Bezugskante xref, Masslinie bei xline (links)
 function Draw:vdim(ya, yb, xref, xline, label)
-  local gap, over = 1 * MM, 1.5 * MM
+  local gap, over = EXT_GAP, 1.5 * MM
   self:line(xref - gap, ya, xline - over, ya)
   self:line(xref - gap, yb, xline - over, yb)
   self:line(xline, ya, xline, yb)
@@ -920,7 +1048,9 @@ function main(script_path)
       local ln = n:lower()
       if ln:find("werkzeugweg") or ln:find("toolpath") then printable = false end
       if n ~= "" and printable then
-        layer_items[#layer_items + 1] = (layer.Visible and "1:" or "0:") .. n:gsub("|", "/")
+        if NormName(n) ~= NormName(PDF_DIM_LAYER) then
+          layer_items[#layer_items + 1] = (layer.Visible and "1:" or "0:") .. n:gsub("|", "/")
+        end
       end
     end
   end)
@@ -928,14 +1058,14 @@ function main(script_path)
   dialog:AddTextField("LayerSel", reg:GetString("LayerSel", ""))
   dialog:AddRadioGroup("SheetMode", reg:GetInt("SheetMode", 1))
   dialog:AddCheckBox("DrawBorder", reg:GetBool("DrawBorder", false))
+  dialog:AddCheckBox("DimVectric", reg:GetBool("DimVectric", true))
+  dialog:AddCheckBox("DimAuto", reg:GetBool("DimAuto", true))
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
   dialog:AddCheckBox("DimPoly", reg:GetBool("DimPoly", false))
   AddNum("MinDim", 25)
   dialog:AddCheckBox("DimRadius", reg:GetBool("DimRadius", false))
   dialog:AddCheckBox("DimAngle", reg:GetBool("DimAngle", false))
-  dialog:AddTextField("DimLayer", reg:GetString("DimLayer", "Bemassung"))
-  dialog:AddCheckBox("HideDimLayer", reg:GetBool("HideDimLayer", false))
   dialog:AddRadioGroup("DimColor", reg:GetInt("DimColor", 1))
   dialog:AddCheckBox("ShowScale", reg:GetBool("ShowScale", true))
   dialog:AddTextField("Title", reg:GetString("Title", ""))
@@ -997,8 +1127,10 @@ function main(script_path)
   end
   local dim_radius  = dialog:GetCheckBox("DimRadius")
   local dim_angle   = dialog:GetCheckBox("DimAngle")
-  local dim_layer   = dialog:GetTextField("DimLayer") or ""
-  local hide_dims   = dialog:GetCheckBox("HideDimLayer")
+  local dim_vectric = dialog:GetCheckBox("DimVectric")
+  local dim_auto    = dialog:GetCheckBox("DimAuto")
+  local dim_layer   = PDF_DIM_LAYER        -- selbst gezeichnete Masslinien (wie in VCarve ein-/ausgeschaltet)
+  local hide_dims   = false
   local dim_color   = dialog:GetRadioIndex("DimColor")   -- 1 schwarz, 2 blau, 3 rot, 4 gruen, 5 grau
   local show_scale  = dialog:GetCheckBox("ShowScale")
   local title       = dialog:GetTextField("Title") or ""
@@ -1019,8 +1151,12 @@ function main(script_path)
   reg:SetDouble("MinDim", min_dim_mm)
   reg:SetBool("DimRadius", dim_radius)
   reg:SetBool("DimAngle", dim_angle)
-  reg:SetString("DimLayer", dim_layer)
-  reg:SetBool("HideDimLayer", hide_dims)
+  reg:SetBool("DimVectric", dim_vectric)
+  reg:SetBool("DimAuto", dim_auto)
+  use_vdims = dim_vectric
+  if not dim_auto then              -- Autobemassung aus: alle automatischen Masse aus (Haekchen bleiben gemerkt)
+    dim_overall, dim_each, dim_poly, dim_radius, dim_angle = false, false, false, false, false
+  end
   reg:SetInt("DimColor", dim_color)
   reg:SetBool("ShowScale", show_scale)
   reg:SetString("Title", title)
@@ -1070,6 +1206,7 @@ function main(script_path)
   -- Konturen
   skipped = 0
   skipped_dims = 0
+  vdim_ok, vdim_unsure, snap_verts = 0, 0, nil
   layer_color_ok, layer_color_fail, layer_color_diag = 0, 0, nil
   straight_bez = 0
   bezier_fallback = 0
@@ -1353,6 +1490,81 @@ function main(script_path)
     end
 
     -- Manuelle Masse aus den Hilfslinien des Bemassungs-Layers
+    -- Fuer die Masshilfslinien: alle Vektoren als gerade Stuecke (Modellkoordinaten)
+    local segs = nil
+    local function Segments()
+      if segs then return segs end
+      segs = {}
+      for _, p in ipairs(paths) do
+        local sx, sy, lx, ly = nil, nil, nil, nil
+        for _, cmd in ipairs(p.cmds) do
+          local k = cmd[1]
+          if k == "m" then
+            sx, sy, lx, ly = cmd[2], cmd[3], cmd[2], cmd[3]
+          elseif k == "l" then
+            segs[#segs + 1] = { lx, ly, cmd[2], cmd[3] }
+            lx, ly = cmd[2], cmd[3]
+          elseif k == "c" then                       -- Bezier abtasten
+            local px, py = lx, ly
+            for i = 1, 16 do
+              local t = i / 16
+              local a, b, c, e = (1 - t) ^ 3, 3 * (1 - t) ^ 2 * t, 3 * (1 - t) * t * t, t ^ 3
+              local qx = a * lx + b * cmd[2] + c * cmd[4] + e * cmd[6]
+              local qy = a * ly + b * cmd[3] + c * cmd[5] + e * cmd[7]
+              segs[#segs + 1] = { px, py, qx, qy }
+              px, py = qx, qy
+            end
+            lx, ly = cmd[6], cmd[7]
+          elseif k == "h" and sx then
+            segs[#segs + 1] = { lx, ly, sx, sy }
+            lx, ly = sx, sy
+          end
+        end
+      end
+      return segs
+    end
+    -- naechster Treffer eines Strahls P + t*(nx,ny), t > 0, mit einem Vektor
+    local max_reach = 0.3 * math.sqrt((vmaxx - vminx) ^ 2 + (vmaxy - vminy) ^ 2)
+    local touch = in_mm and 0.5 or 0.02                 -- Strahl "streift" einen Punkt (Tangente, Ecke)
+    local function RayHit(px, py, nx, ny)
+      local best = nil
+      for _, sg in ipairs(Segments()) do
+        local dx, dy = sg[3] - sg[1], sg[4] - sg[2]
+        local den = nx * dy - ny * dx
+        if math.abs(den) > 1e-12 then
+          local ax, ay = sg[1] - px, sg[2] - py
+          local t = (ax * dy - ay * dx) / den
+          local u = (ax * ny - ay * nx) / den
+          if u >= -1e-9 and u <= 1 + 1e-9 and t > 1e-6 and t <= max_reach and (best == nil or t < best) then
+            best = t
+          end
+        end
+        -- Endpunkte, an denen der Strahl knapp vorbeigeht (z. B. Kreis-Tangente)
+        for _, q in ipairs({ { sg[1], sg[2] }, { sg[3], sg[4] } }) do
+          local qx, qy = q[1] - px, q[2] - py
+          local t = qx * nx + qy * ny
+          if t > 1e-6 and t <= max_reach and math.abs(qx * ny - qy * nx) <= touch and (best == nil or t < best) then
+            best = t
+          end
+        end
+      end
+      return best
+    end
+    -- Masshilfslinie vom Vektor bis knapp ueber die Masslinie (senkrecht zur Masslinie)
+    local function ExtLine(px, py, nx, ny)
+      local t1, t2 = RayHit(px, py, nx, ny), RayHit(px, py, -nx, -ny)
+      local t, sx = t1, 1
+      if t2 and (t == nil or t2 < t) then t, sx = t2, -1 end
+      if not t then return end
+      local hx, hy = px + sx * nx * t, py + sx * ny * t        -- Treffpunkt am Vektor
+      local ax, ay = tx(px), ty(py)
+      local bx, by = tx(hx), ty(hy)
+      local len = math.sqrt((bx - ax) ^ 2 + (by - ay) ^ 2)
+      local gap, over = EXT_GAP, 1.5 * MM
+      if len <= gap + 0.1 then return end
+      local ux, uy = (ax - bx) / len, (ay - by) / len        -- vom Vektor zur Masslinie
+      d:line(bx + ux * gap, by + uy * gap, ax + ux * over, ay + uy * over)
+    end
     for _, l in ipairs(dim_lines) do
       if l.angle then
         local a1 = atan2(l[2] - l.vy, l[1] - l.vx)
@@ -1363,6 +1575,11 @@ function main(script_path)
                    fmtAng(math.abs(sw) * 180 / math.pi))
       else
         local len = math.sqrt((l[3] - l[1]) ^ 2 + (l[4] - l[2]) ^ 2)
+        if len > 0 and #paths > 0 then
+          local nx, ny = -(l[4] - l[2]) / len, (l[3] - l[1]) / len
+          ExtLine(l[1], l[2], nx, ny)
+          ExtLine(l[3], l[4], nx, ny)
+        end
         d:alignedDim(tx(l[1]), ty(l[2]), tx(l[3]), ty(l[4]), (fmt(len)))
       end
     end
@@ -1525,33 +1742,18 @@ function main(script_path)
     local n_ang = 0
     for _, l in ipairs(dim_lines) do if l.angle then n_ang = n_ang + 1 end end
     msg = msg .. "\n" .. (#dim_lines - n_ang) .. T(" Laengenmass(e), ", " length dimension(s), ") ..
-          n_ang .. T(" Winkelmass(e) vom Layer \"", " angle dimension(s) from layer \"") .. dim_layer .. "\""
-  elseif dim_layer ~= "" and not hide_dims then
-    -- Hilfe, wenn keine manuellen Masse gefunden wurden
-    if not dim_info.found then
-      msg = msg .. T("\n\nHinweis: Mass-Layer \"", "\n\nNote: dimension layer \"") .. dim_layer ..
-            T("\" nicht gefunden.\nVorhandene Layer: ", "\" not found.\nExisting layers: ") ..
-            table.concat(dim_info.names, ", ")
-    elseif dim_info.hidden then
-      msg = msg .. T("\n\nHinweis: Mass-Layer \"", "\n\nNote: dimension layer \"") .. dim_layer ..
-            T("\" ist in VCarve ausgeblendet.", "\" is hidden in VCarve.")
-    else
-      msg = msg .. T("\n\nHinweis: Auf dem Mass-Layer \"", "\n\nNote: dimension layer \"") .. dim_layer ..
-            T("\" wurden keine offenen Linien gefunden (", "\" contains no open lines (") ..
-            dim_info.objects .. T(" Objekt(e)).", " object(s)).")
-    end
+          n_ang .. T(" Winkelmass(e)", " angle dimension(s)") ..
+          (vdim_ok > 0 and (T(" - davon ", " - ") .. vdim_ok .. T(" aus Vectric-Bemassungen", " from Vectric dimensions")) or "")
   end
   if dim_each then
     msg = msg .. "\n(" .. n_group .. T(" davon in Gruppen - ohne Einzelmasse)", " of them in groups - no individual dimensions)")
   end
-  if skipped_dims > 0 then
-    msg = msg .. "\n\n" .. skipped_dims ..
-          T(" Vectric-Bemassung(en) uebersprungen - VCarve gibt deren Punkte nicht an Gadgets weiter." ..
-            "\nFuer Masse im PDF bitte Linien auf den Mass-Layer \"" .. dim_layer .. "\" zeichnen" ..
-            " (2 Punkte = Laenge, 3 Punkte = Winkel).",
-            " Vectric dimension(s) skipped - VCarve does not pass their points to gadgets." ..
-            "\nFor dimensions in the PDF, draw lines on the dimension layer \"" .. dim_layer .. "\"" ..
-            " (2 points = length, 3 points = angle).")
+  if vdim_unsure > 0 then
+    msg = msg .. "\n\n" .. vdim_unsure ..
+          T(" Vectric-Bemassung(en) nicht sicher erkannt (z. B. schraeg) - fehlen im PDF." ..
+            "\nDafuer eine Linie von Pfeil zu Pfeil auf den Layer \"" .. PDF_DIM_LAYER .. "\" zeichnen.",
+            " Vectric dimension(s) not recognised reliably (e.g. aligned) - missing in the PDF." ..
+            "\nDraw a line from arrow to arrow on layer \"" .. PDF_DIM_LAYER .. "\" instead.")
   end
   if vec_color == 6 and layer_color_ok == 0 then
     msg = msg .. T("\n\nHinweis: Layerfarben konnten nicht gelesen werden - Linien schwarz gedruckt.",

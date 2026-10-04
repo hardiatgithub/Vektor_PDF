@@ -39,6 +39,11 @@
   input.ver { border: 0; background: transparent; color: #888; font-size: 0.79em; width: 10em; padding: 0; }
   .zoombox { float: left; font-size: 0.92em; }
   .layers { margin: 0.2em 0 0.3em 1.6em; }
+  .dimbtns { margin: 0.1em 0 0.3em 0; }
+  .dbtn { display: inline-block; border: 1px solid #bbb; background: #fff; padding: 0.15em 0.5em; margin: 0 0.4em 0.2em 0; }
+  .dmore { text-decoration: none; color: #333; margin-left: 0.4em; }
+  .automenu { border: 1px solid #ccc; background: #fafafa; padding: 0.3em 0.6em; margin: 0 0 0.4em 0; }
+  .automenu.dim { color: #999; }
   .layers label { white-space: nowrap; margin-right: 0.9em; }
   .layers.dim { color: #999; }
 </style>
@@ -77,18 +82,23 @@
 </fieldset>
 
 <fieldset>
-  <legend><span class="t" data-en="Dimensions (created automatically)">Bemaßung (wird automatisch erzeugt)</span></legend>
-  <label><input type="checkbox" id="DimOverall"> <span class="t" data-en="Overall dimensions (width × height)">Gesamtmaße (Breite × Höhe)</span></label><br>
-  <label><input type="checkbox" id="DimEach"> <span class="t" data-en="Dimensions of each vector (circles as Ø, single lines as length)">Maße jedes Vektors (Kreise als Ø, Einzellinien als Länge)</span></label><br>
-  <label><input type="checkbox" id="DimPoly"> <span class="t" data-en="Open polylines: each straight segment">Offene Polylinien: jedes gerade Stück</span></label><br>
-  <label><input type="checkbox" id="DimRadius"> <span class="t" data-en="Radii on arcs (R …)">Radien an Bögen (R …)</span></label><br>
-  <label><input type="checkbox" id="DimAngle"> <span class="t" data-en="Angles at corners (except 90°)">Winkel an Ecken (ohne 90°)</span></label>
-  <table>
-    <tr><td><span class="t" data-en="Dim. layer:">Maß-Layer:</span></td>
-      <td><input class="num" style="width:10em; max-width:45%; text-align:left" type="text" id="DimLayer">
-      &nbsp;<label><input type="checkbox" id="HideDimLayer" onclick="syncAll()"> <span class="t" data-en="hide">ausblenden</span></label>
-      <br><span class="hint t" data-en="Lines on this layer are printed as dimensions · 3 points (V) = angle">Linien auf diesem Layer werden als Maß gedruckt · 3 Punkte (V) = Winkel</span></td></tr>
-  </table>
+  <legend><span class="t" data-en="Dimensions">Bemaßung</span></legend>
+  <div class="dimbtns">
+    <label class="dbtn"><input type="checkbox" id="DimVectric"> <span class="t" data-en="Vectric dimensions always">Vectric-Bemaßung immer</span>
+      <span class="hint t" data-en="(also from hidden layers · horizontal / vertical only)">(auch aus ausgeblendeten Layern · nur waagrecht / senkrecht)</span></label>
+    <span class="dbtn"><label><input type="checkbox" id="DimAuto" onclick="syncAll()"> <span class="t" data-en="Auto dimensions">Autobemaßung</span></label>
+      <a href="#" class="dmore" onclick="toggleAutoMenu(); return false;"><span id="AutoArrow">&#9658;</span></a></span>
+  </div>
+  <div id="AutoMenu" class="automenu" style="display:none">
+    <label><input type="checkbox" id="DimOverall"> <span class="t" data-en="Overall dimensions (width × height)">Gesamtmaße (Breite × Höhe)</span></label><br>
+    <label><input type="checkbox" id="DimEach"> <span class="t" data-en="Dimensions of each vector (circles as Ø, single lines as length)">Maße jedes Vektors (Kreise als Ø, Einzellinien als Länge)</span></label><br>
+    <label><input type="checkbox" id="DimPoly"> <span class="t" data-en="Open polylines: each straight segment">Offene Polylinien: jedes gerade Stück</span></label><br>
+    <label><input type="checkbox" id="DimRadius"> <span class="t" data-en="Radii on arcs (R …)">Radien an Bögen (R …)</span></label><br>
+    <label><input type="checkbox" id="DimAngle"> <span class="t" data-en="Angles at corners (except 90°)">Winkel an Ecken (ohne 90°)</span></label><br>
+    <span class="t" data-en="Min. size:">Einzelmaße ab:</span> <input class="num" type="text" id="MinDim"> mm
+    <span class="hint t" data-en="&nbsp;smaller vectors (e.g. letters) get no dimension · 0 = all">&nbsp;kleinere Vektoren (z. B. Buchstaben) ohne Maß · 0 = alle</span>
+  </div>
+  <div class="hint"><span class="t" data-en="Switch off: dimensions only from layers switched on in VCarve. Own dimension lines: layer &quot;pdf_dim&quot; (2 points = length, 3 points = angle).">Schalter aus: Maße nur aus Layern, die in VCarve eingeschaltet sind. Eigene Maßlinien: Layer „pdf_dim“ (2 Punkte = Länge, 3 Punkte = Winkel).</span></div>
   <table>
     <tr><td><span class="t" data-en="Colour:">Farbe:</span></td><td>
       <label><input type="radio" name="DimColor" value="1"> <span class="t" data-en="Black">Schwarz</span></label>
@@ -96,9 +106,6 @@
       <label><input type="radio" name="DimColor" value="3"> <span class="t" data-en="Red">Rot</span></label>
       <label><input type="radio" name="DimColor" value="4"> <span class="t" data-en="Green">Grün</span></label>
       <label><input type="radio" name="DimColor" value="5"> <span class="t" data-en="Grey">Grau</span></label></td></tr>
-    <tr><td><span class="t" data-en="Min. size:">Einzelmaße ab:</span></td>
-      <td><input class="num" type="text" id="MinDim"> mm
-      <span class="hint t" data-en="&nbsp;smaller vectors (e.g. letters) get no dimension · 0 = all">&nbsp;kleinere Vektoren (z. B. Buchstaben) ohne Maß · 0 = alle</span></td></tr>
     <tr><td><span class="t" data-en="Line width:">Linienstärke:</span></td>
       <td><input class="num" type="text" id="DimLineWidth"> mm
       <span class="hint t" data-en="&nbsp;dimension lines (default 0.25)">&nbsp;Maßlinien (Standard 0,25)</span></td></tr>
@@ -333,7 +340,22 @@ function syncLayerBox() {
   if (box) box.className = on ? "layers" : "layers dim";
 }
 
-function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); applyZoom(false); }
+// Rollmenue der Autobemassung auf- und zuklappen
+function toggleAutoMenu() {
+  var m = document.getElementById("AutoMenu"), a = document.getElementById("AutoArrow");
+  if (!m) return;
+  var open = (m.style.display == "none");
+  m.style.display = open ? "block" : "none";
+  if (a) a.innerHTML = open ? "&#9660;" : "&#9658;";
+  applyZoom(true);
+}
+// Punkte im Rollmenue grau, solange "Autobemassung" aus ist
+function syncAutoMenu() {
+  var cb = document.getElementById("DimAuto"), m = document.getElementById("AutoMenu");
+  if (cb && m) m.className = cb.checked ? "automenu" : "automenu dim";
+}
+
+function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); syncAutoMenu(); applyZoom(false); }
 
 window.onload = function () {
   reportScreen();

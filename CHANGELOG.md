@@ -6,13 +6,28 @@ Neueste Version steht oben.
 ## [Unveröffentlicht]
 
 ### Neu (nach beta.4)
+- **Vectric-Bemaßungen im PDF**: Waagrechte und senkrechte Bemaßungen aus VCarve werden automatisch ins PDF
+  übernommen – mit Maßlinie, Pfeilen, Zahl und Hilfslinien. Gesteuert wird das über die Layer in VCarve:
+  ist der Layer mit den Bemaßungen eingeschaltet, erscheinen sie im PDF, sonst nicht. An der Zeichnung
+  wird nichts verändert. Schräge Bemaßungen kann VCarve nicht an Gadgets weitergeben – sie fehlen im PDF
+  (Hinweis in der Abschlussmeldung).
+- **Eigene Maßlinien auf Layer „pdf_dim“**: Eine Linie von Pfeil zu Pfeil wird als Maß gedruckt, eine Linie
+  mit 3 Punkten (V-Form) als Winkel – ebenfalls nur, wenn der Layer in VCarve eingeschaltet ist.
+  Die Einstellungen „Maß-Layer“ und „ausblenden“ im Dialog entfallen dadurch.
+- **Schalter „Vectric-Bemaßung immer“**: an = Vectric-Bemaßungen und Layer „pdf_dim“ werden auch gedruckt, wenn ihr
+  Layer in VCarve ausgeblendet ist; aus = nur aus eingeschalteten Layern.
+- **Übersichtlicher Bemaßungs-Bereich**: zwei Schalter „Vectric-Bemaßung immer“ und
+  „Autobemaßung“; die einzelnen Punkte der Autobemaßung (Gesamtmaße, jeder Vektor, Polylinien, Radien, Winkel,
+  Einzelmaße ab) stehen in einem aufklappbaren Menü (▸).
+- **Maßhilfslinien**: Maße von Vectric-Bemaßungen und vom Layer „pdf_dim“ bekommen automatisch Hilfslinien
+  senkrecht bis kurz vor das Bauteil – wie in einer technischen Zeichnung. Alle Maßhilfslinien halten
+  2 mm Abstand zum Bauteil (vorher 1 mm).
 - **Layer auswählen**: Unter „Welche Vektoren“ gibt es „Gewählte Layer“ mit einer Liste aller Layer zum Ankreuzen
   (z. B. nur Layer 1 und 3). Auch ausgeblendete Layer können gewählt werden; die Auswahl wird gemerkt.
-  Der Maß-Layer folgt weiter seiner eigenen Einstellung. Interne Werkzeugweg-Layer von VCarve
-  (z. B. „Werkzeugweg-Vorschauen“) erscheinen nicht in der Liste.
+  Interne Werkzeugweg-Layer von VCarve (z. B. „Werkzeugweg-Vorschauen“) erscheinen nicht in der Liste.
 - **Layerfarbe**: Jede Linie wird automatisch in der Farbe ihres VCarve-Layers gedruckt; die Farbauswahl
-  für die Linien entfällt (die Farbe der Bemaßung bleibt einstellbar)
-  (sehr helle Farben/Weiß werden grau gedruckt, damit sie auf Papier sichtbar bleiben).
+  für die Linien entfällt (die Farbe der Bemaßung bleibt einstellbar). Sehr helle Farben/Weiß werden grau gedruckt.
+- Hinweis, wenn das PDF nicht geschrieben werden kann, weil es noch geöffnet ist.
 
 ### Geändert
 - **Release-Ablauf** (Beitrag von Gremlin): Entwicklungsdateien heißen jetzt `Vektor_PDF_dev.lua` /
@@ -32,8 +47,6 @@ Neueste Version steht oben.
 - **Längenmaße mit Abstand**: Einzel- und Gesamtmaße, die sich überschneiden würden, werden automatisch
   in eigene Reihen nach außen versetzt – keine Maßlinie und keine Zahl liegt mehr auf einer anderen.
   Der Platz am Blattrand wird dafür automatisch vergrößert.
-- **Hinweis auf Vectric-Bemaßungen**: Die Abschlussmeldung zählt übersprungene Vectric-Bemaßungen getrennt
-  und erklärt, dass VCarve deren Punkte nicht an Gadgets weitergibt – Maße bitte als Linien auf dem Maß-Layer zeichnen.
 
 ### Behoben
 - Bei Jobs mit **mehreren Seiten (Sheets)** lagen alle Teile im PDF übereinander. Die Seiten werden jetzt
