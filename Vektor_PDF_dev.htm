@@ -44,6 +44,7 @@
   .dmore { text-decoration: none; color: #333; margin-left: 0.4em; }
   .automenu { border: 1px solid #ccc; background: #fafafa; padding: 0.3em 0.6em; margin: 0 0 0.4em 0; }
   .automenu.dim { color: #999; }
+  .vhint { font-size: 1em; color: #333; margin: 0 0 0.4em 0; }
   .layers label { white-space: nowrap; margin-right: 0.9em; }
   .layers.dim { color: #999; }
 </style>
@@ -83,11 +84,14 @@
 
 <fieldset>
   <legend><span class="t" data-en="Dimensions">Bemaßung</span></legend>
+  <div class="vhint"><span class="t" data-en="Horizontal and vertical Vectric dimensions are taken over (if shown in VCarve) – add any others with auto or custom dimensions.">Waagrechte und senkrechte Vectric-Bemaßungen werden übernommen (wenn in VCarve angezeigt) – alle anderen mit Autobemaßung oder individueller Bemaßung ergänzen.</span></div>
   <div class="dimbtns">
-    <label class="dbtn"><input type="checkbox" id="DimVectric"> <span class="t" data-en="Vectric dimensions always">Vectric-Bemaßung immer</span>
-      <span class="hint t" data-en="(also from hidden layers · horizontal / vertical only)">(auch aus ausgeblendeten Layern · nur waagrecht / senkrecht)</span></label>
     <span class="dbtn"><label><input type="checkbox" id="DimAuto" onclick="syncAll()"> <span class="t" data-en="Auto dimensions">Autobemaßung</span></label>
       <a href="#" class="dmore" onclick="toggleAutoMenu(); return false;"><span id="AutoArrow">&#9658;</span></a></span>
+    <span class="dbtn"><label><input type="checkbox" id="DimCustom" onclick="onCustomClick(this)"> <span class="t" data-en="Custom dimensions – layer:">Individuelle Bemaßung – Layer:</span></label>
+      <input class="num" style="width:7em; text-align:left" type="text" id="DimCustomLayer">
+      <input class="LuaButton" id="CreateDimLayer" type="button" value="Layer anlegen" data-en="Create layer">
+      <a href="#" class="dmore" onclick="toggleMenu('CustomHelp', 'CustomArrow'); return false;"><span id="CustomArrow">&#9658;</span></a></span>
   </div>
   <div id="AutoMenu" class="automenu" style="display:none">
     <label><input type="checkbox" id="DimOverall"> <span class="t" data-en="Overall dimensions (width × height)">Gesamtmaße (Breite × Höhe)</span></label><br>
@@ -98,7 +102,19 @@
     <span class="t" data-en="Min. size:">Einzelmaße ab:</span> <input class="num" type="text" id="MinDim"> mm
     <span class="hint t" data-en="&nbsp;smaller vectors (e.g. letters) get no dimension · 0 = all">&nbsp;kleinere Vektoren (z. B. Buchstaben) ohne Maß · 0 = alle</span>
   </div>
-  <div class="hint"><span class="t" data-en="Switch off: dimensions only from layers switched on in VCarve. Own dimension lines: layer &quot;pdf_dim&quot; (2 points = length, 3 points = angle).">Schalter aus: Maße nur aus Layern, die in VCarve eingeschaltet sind. Eigene Maßlinien: Layer „pdf_dim“ (2 Punkte = Länge, 3 Punkte = Winkel).</span></div>
+  <div id="CustomHelp" class="automenu" style="display:none">
+    <span class="t" data-en="&lt;b&gt;How to draw your own dimensions in VCarve:&lt;/b&gt;&lt;br&gt;
+      1. Enter a layer name above (e.g. &quot;pdf_dim&quot;) – the gadget creates the layer on the next export if it does not exist yet. Make it the active layer in VCarve.&lt;br&gt;
+      2. &lt;b&gt;Length:&lt;/b&gt; draw a line (2 points) exactly from arrow tip to arrow tip – e.g. next to the edge, parallel to it. Snap to the corners so the length is exact.&lt;br&gt;
+      3. &lt;b&gt;Angle:&lt;/b&gt; draw a polyline with 3 points in a V shape – the middle point is the vertex.&lt;br&gt;
+      4. The gadget prints arrows, the value and extension lines to the part automatically.&lt;br&gt;
+      5. The layer is printed when it is switched on in VCarve – switch it off to leave these dimensions out."><b>So zeichnest du eigene Maße in VCarve:</b><br>
+      1. Oben einen Layernamen eintragen (z. B. „pdf_dim“) – fehlt der Layer, legt das Gadget ihn beim nächsten Export automatisch an. Dann in VCarve als aktiven Layer wählen.<br>
+      2. <b>Länge:</b> eine Linie (2 Punkte) genau von Pfeilspitze zu Pfeilspitze zeichnen – z. B. neben der Kante, parallel dazu. Auf die Eckpunkte fangen, damit die Länge exakt stimmt.<br>
+      3. <b>Winkel:</b> eine Polylinie mit 3 Punkten in V-Form zeichnen – der mittlere Punkt ist der Scheitel.<br>
+      4. Pfeile, Zahl und Hilfslinien bis zum Bauteil ergänzt das Gadget automatisch.<br>
+      5. Gedruckt wird der Layer, wenn er in VCarve eingeschaltet ist – zum Weglassen einfach ausblenden.</span>
+  </div>
   <table>
     <tr><td><span class="t" data-en="Colour:">Farbe:</span></td><td>
       <label><input type="radio" name="DimColor" value="1"> <span class="t" data-en="Black">Schwarz</span></label>
@@ -182,6 +198,11 @@ function syncLang() {
     if ((" " + el.className + " ").indexOf(" t ") < 0) continue;
     if (el.getAttribute("data-de") == null) el.setAttribute("data-de", el.innerHTML);
     el.innerHTML = (lang == "2") ? el.getAttribute("data-en") : el.getAttribute("data-de");
+  }
+  var lb = document.getElementById("CreateDimLayer");
+  if (lb) {
+    if (lb.getAttribute("data-de") == null) lb.setAttribute("data-de", lb.value);
+    lb.value = (lang == "2") ? lb.getAttribute("data-en") : lb.getAttribute("data-de");
   }
   var cancel = document.getElementById("ButtonCancel");
   if (cancel) {
@@ -341,6 +362,14 @@ function syncLayerBox() {
 }
 
 // Rollmenue der Autobemassung auf- und zuklappen
+function toggleMenu(id, arrowId) {
+  var m = document.getElementById(id), a = document.getElementById(arrowId);
+  if (!m) return;
+  var open = (m.style.display == "none");
+  m.style.display = open ? "block" : "none";
+  if (a) a.innerHTML = open ? "&#9660;" : "&#9658;";
+  applyZoom(true);
+}
 function toggleAutoMenu() {
   var m = document.getElementById("AutoMenu"), a = document.getElementById("AutoArrow");
   if (!m) return;
@@ -350,12 +379,26 @@ function toggleAutoMenu() {
   applyZoom(true);
 }
 // Punkte im Rollmenue grau, solange "Autobemassung" aus ist
+// Haekchen gesetzt -> Layer gleich anlegen lassen (ruft OnLuaButton_CreateDimLayer in VCarve auf)
+function onCustomClick(cb) {
+  syncAll();
+  if (cb.checked) {
+    var b = document.getElementById("CreateDimLayer");
+    if (b) { try { b.click(); } catch (e) {} }
+  }
+}
+function syncCustom() {
+  var cb = document.getElementById("DimCustom"), tf = document.getElementById("DimCustomLayer");
+  if (!cb || !tf) return;
+  tf.readOnly = !cb.checked;
+  tf.className = cb.checked ? "num" : "num off";
+}
 function syncAutoMenu() {
   var cb = document.getElementById("DimAuto"), m = document.getElementById("AutoMenu");
   if (cb && m) m.className = cb.checked ? "automenu" : "automenu dim";
 }
 
-function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); syncAutoMenu(); applyZoom(false); }
+function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); syncAutoMenu(); syncCustom(); applyZoom(false); }
 
 window.onload = function () {
   reportScreen();

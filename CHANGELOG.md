@@ -11,13 +11,10 @@ Neueste Version steht oben.
   ist der Layer mit den Bemaßungen eingeschaltet, erscheinen sie im PDF, sonst nicht. An der Zeichnung
   wird nichts verändert. Schräge Bemaßungen kann VCarve nicht an Gadgets weitergeben – sie fehlen im PDF
   (Hinweis in der Abschlussmeldung).
-- **Eigene Maßlinien auf Layer „pdf_dim“**: Eine Linie von Pfeil zu Pfeil wird als Maß gedruckt, eine Linie
+- **Individuelle Bemaßung** (Schalter mit frei wählbarem Layer, Standard „pdf_dim“; fehlt der Layer, wird er – in Hellgrün, später änderbar – angelegt, auch per Knopf „Layer anlegen“; Anleitung im Rollmenü ►): Eine Linie von Pfeil zu Pfeil wird als Maß gedruckt, eine Linie
   mit 3 Punkten (V-Form) als Winkel – ebenfalls nur, wenn der Layer in VCarve eingeschaltet ist.
   Die Einstellungen „Maß-Layer“ und „ausblenden“ im Dialog entfallen dadurch.
-- **Schalter „Vectric-Bemaßung immer“**: an = Vectric-Bemaßungen und Layer „pdf_dim“ werden auch gedruckt, wenn ihr
-  Layer in VCarve ausgeblendet ist; aus = nur aus eingeschalteten Layern.
-- **Übersichtlicher Bemaßungs-Bereich**: zwei Schalter „Vectric-Bemaßung immer“ und
-  „Autobemaßung“; die einzelnen Punkte der Autobemaßung (Gesamtmaße, jeder Vektor, Polylinien, Radien, Winkel,
+- **Übersichtlicher Bemaßungs-Bereich**: Schalter „Autobemaßung“; die einzelnen Punkte der Autobemaßung (Gesamtmaße, jeder Vektor, Polylinien, Radien, Winkel,
   Einzelmaße ab) stehen in einem aufklappbaren Menü (▸).
 - **Maßhilfslinien**: Maße von Vectric-Bemaßungen und vom Layer „pdf_dim“ bekommen automatisch Hilfslinien
   senkrecht bis kurz vor das Bauteil – wie in einer technischen Zeichnung. Alle Maßhilfslinien halten

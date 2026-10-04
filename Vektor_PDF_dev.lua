@@ -37,7 +37,7 @@ end
 local skipped = 0
 local vdims = {}                    -- gesammelte Vectric-Bemassungen { obj, sheet }
 local vdim_ok, vdim_unsure = 0, 0
-local use_vdims = true              -- Schalter "Vectric-Bemassung": Masse auch aus ausgeblendeten Layern
+local use_vdims = false             -- Vectric-Masse nur aus eingeschalteten Layern (wie in VCarve angezeigt)
 local layer_colors = {}                          -- Layer-Id -> Farbe (fuer "Nur ausgewaehlte")
 local layer_color_ok, layer_color_fail = 0, 0   -- Layerfarben gelesen / nicht lesbar
 local layer_color_diag = nil
@@ -393,6 +393,21 @@ local function ObjSheet(obj)
   return nil
 end
 
+-- Layerfarbe setzen (nur beim Neuanlegen; danach in VCarve frei aenderbar).
+-- Je nach API-Version 0..1 oder 0..255 -> pruefen, ob die Farbe angekommen ist.
+local function SetLayerColour(layer, r, g, b)
+  local function close()
+    local c = LayerColour(layer)
+    return c and math.abs(c[1] - r) < 0.05 and math.abs(c[2] - g) < 0.05 and math.abs(c[3] - b) < 0.05
+  end
+  for _, m in ipairs({ "SetColor", "SetColour" }) do
+    if pcall(function() layer[m](layer, r, g, b) end) and close() then return true end
+    if pcall(function() layer[m](layer, r * 255, g * 255, b * 255) end) and close() then return true end
+  end
+  return false
+end
+local CUSTOM_LAYER_RGB = { 0.45, 0.85, 0.35 }   -- hellgruen
+
 local function AddObject(obj, contours, in_group, sheet, color)
   if sheet == nil then sheet = ObjSheet(obj) end
   local ok, contour = pcall(function() return obj:GetContour() end)
@@ -499,7 +514,8 @@ end
 -- waagrechte bzw. senkrechte Masslinie abgeleitet, deren Enden auf das Bauteil fangen.
 -- Schraege oder unsichere Bemassungen werden ausgelassen.
 -- ------------------------------------------------------------------
-local PDF_DIM_LAYER = "pdf_dim"     -- Layer fuer selbst gezeichnete Masslinien
+local PDF_DIM_LAYER = "pdf_dim"     -- Layer fuer selbst gezeichnete Masslinien (im Dialog einstellbar)
+local custom_dims = true            -- Schalter "Individuelle Bemassung"
 local snap_verts = nil              -- Fangpunkte aller Vektoren (einmal je Lauf)
 local snap_segs = nil               -- gerade Stuecke aller Vektoren (fuer schmale Masse)
 
@@ -687,7 +703,7 @@ local function CollectContours(job, selected_only, dim_layer, layer_filter)
       if not layer.Visible then info.hidden = true end
     end
     local use
-    if is_dim then use = layer.Visible or use_vdims   -- Mass-Layer pdf_dim: Schalter an = immer
+    if is_dim then use = custom_dims and layer.Visible   -- Individuelle Bemassung: Layer wie in VCarve angezeigt
     elseif selected_only then use = false
     elseif layer_filter then use = layer_filter[NormName(lname)] == true   -- auch ausgeblendete
     else use = layer.Visible end
@@ -1103,6 +1119,59 @@ end
 -- ------------------------------------------------------------------
 -- Hauptprogramm
 -- ------------------------------------------------------------------
+-- ------------------------------------------------------------------
+-- Knopf im Dialog: Layer fuer die individuelle Bemassung anlegen
+-- (VCarve ruft OnLuaButton_<Id> auf, wenn ein Knopf der Klasse "LuaButton" gedrueckt wird)
+-- ------------------------------------------------------------------
+function OnLuaButton_CreateDimLayer(dialog)
+  local en = false
+  pcall(function() en = dialog:GetRadioIndex("Lang") == 2 end)
+  local function T(de, e) return en and e or de end
+  local name = ""
+  pcall(function() name = dialog:GetTextField("DimCustomLayer") or "" end)
+  name = name:gsub("^%s+", ""):gsub("%s+$", "")
+  if name == "" then
+    DisplayMessageBox(T("Bitte zuerst einen Layernamen eintragen.", "Please enter a layer name first."))
+    return true
+  end
+  local job = VectricJob()
+  if not job.Exists then return true end
+  local exists = false
+  pcall(function()
+    local lm = job.LayerManager
+    local lpos = lm:GetHeadPosition()
+    while lpos ~= nil do
+      local layer
+      layer, lpos = lm:GetNext(lpos)
+      if NormName(LayerName(layer)) == NormName(name) then exists = true end
+    end
+  end)
+  local layer = nil
+  local ok = pcall(function() layer = job.LayerManager:GetLayerWithName(name) end)
+  if not ok or layer == nil then
+    DisplayMessageBox(T("Der Layer konnte nicht angelegt werden.", "The layer could not be created."))
+    return true
+  end
+  if not exists then SetLayerColour(layer, CUSTOM_LAYER_RGB[1], CUSTOM_LAYER_RGB[2], CUSTOM_LAYER_RGB[3]) end
+  pcall(function() layer.Visible = true end)
+  pcall(function() job.LayerManager:SetActiveLayer(layer) end)   -- gleich zum Zeichnen auswaehlen
+  pcall(function() job:Refresh2DView() end)
+  if exists then
+    DisplayMessageBox(T("Der Layer \"" .. name .. "\" ist bereits vorhanden.",
+                        "The layer \"" .. name .. "\" already exists.") ..
+      T("\n\nDialog schliessen, den Layer in VCarve als aktiven Layer waehlen und die Masslinien zeichnen.",
+        "\n\nClose the dialog, make the layer active in VCarve and draw the dimension lines."))
+  else
+    DisplayMessageBox(T("Der Layer \"" .. name .. "\" wurde angelegt und kann jetzt bearbeitet werden.",
+                        "The layer \"" .. name .. "\" has been created and can now be edited.") ..
+      T("\n\nDialog schliessen (Abbrechen), den Layer in VCarve als aktiven Layer waehlen und Linien" ..
+        " von Pfeil zu Pfeil zeichnen (3 Punkte = Winkel). Danach das Gadget erneut starten.",
+        "\n\nClose the dialog (Cancel), make the layer active in VCarve and draw lines" ..
+        " from arrow to arrow (3 points = angle). Then run the gadget again."))
+  end
+  return true
+end
+
 function main(script_path)
   local reg = Registry("PDF_Export")
   local lang = reg:GetInt("Lang", 1)                 -- 1 = Deutsch, 2 = English
@@ -1176,7 +1245,7 @@ function main(script_path)
       local ln = n:lower()
       if ln:find("werkzeugweg") or ln:find("toolpath") then printable = false end
       if n ~= "" and printable then
-        if NormName(n) ~= NormName(PDF_DIM_LAYER) then
+        if NormName(n) ~= NormName(reg:GetString("DimCustomLayer", "pdf_dim")) then
           layer_items[#layer_items + 1] = (layer.Visible and "1:" or "0:") .. n:gsub("|", "/")
         end
       end
@@ -1186,8 +1255,9 @@ function main(script_path)
   dialog:AddTextField("LayerSel", reg:GetString("LayerSel", ""))
   dialog:AddRadioGroup("SheetMode", reg:GetInt("SheetMode", 1))
   dialog:AddCheckBox("DrawBorder", reg:GetBool("DrawBorder", false))
-  dialog:AddCheckBox("DimVectric", reg:GetBool("DimVectric", true))
   dialog:AddCheckBox("DimAuto", reg:GetBool("DimAuto", true))
+  dialog:AddCheckBox("DimCustom", reg:GetBool("DimCustom", true))
+  dialog:AddTextField("DimCustomLayer", reg:GetString("DimCustomLayer", "pdf_dim"))
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
   dialog:AddCheckBox("DimPoly", reg:GetBool("DimPoly", false))
@@ -1255,9 +1325,10 @@ function main(script_path)
   end
   local dim_radius  = dialog:GetCheckBox("DimRadius")
   local dim_angle   = dialog:GetCheckBox("DimAngle")
-  local dim_vectric = dialog:GetCheckBox("DimVectric")
   local dim_auto    = dialog:GetCheckBox("DimAuto")
-  local dim_layer   = PDF_DIM_LAYER        -- selbst gezeichnete Masslinien (wie in VCarve ein-/ausgeschaltet)
+  custom_dims       = dialog:GetCheckBox("DimCustom")
+  PDF_DIM_LAYER     = (dialog:GetTextField("DimCustomLayer") or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  local dim_layer   = PDF_DIM_LAYER        -- Layer der individuellen Bemassung
   local hide_dims   = false
   local dim_color   = dialog:GetRadioIndex("DimColor")   -- 1 schwarz, 2 blau, 3 rot, 4 gruen, 5 grau
   local show_scale  = dialog:GetCheckBox("ShowScale")
@@ -1279,9 +1350,38 @@ function main(script_path)
   reg:SetDouble("MinDim", min_dim_mm)
   reg:SetBool("DimRadius", dim_radius)
   reg:SetBool("DimAngle", dim_angle)
-  reg:SetBool("DimVectric", dim_vectric)
   reg:SetBool("DimAuto", dim_auto)
-  use_vdims = dim_vectric
+  reg:SetBool("DimCustom", custom_dims)
+  reg:SetString("DimCustomLayer", PDF_DIM_LAYER)
+
+  -- Individuelle Bemassung: Layer muss benannt sein; fehlt er in der Datei, wird er angelegt
+  local custom_created = false
+  if custom_dims then
+    if PDF_DIM_LAYER == "" then
+      DisplayMessageBox(T("Bitte bei \"Individuelle Bemassung\" einen Layernamen eintragen.",
+                          "Please enter a layer name for \"Custom dimensions\"."))
+      return false
+    end
+    local exists = false
+    pcall(function()
+      local lm = job.LayerManager
+      local lpos = lm:GetHeadPosition()
+      while lpos ~= nil do
+        local layer
+        layer, lpos = lm:GetNext(lpos)
+        if NormName(LayerName(layer)) == NormName(PDF_DIM_LAYER) then exists = true end
+      end
+    end)
+    if not exists then
+      local nl = nil
+      local okc = pcall(function() nl = job.LayerManager:GetLayerWithName(PDF_DIM_LAYER) end)
+      if okc then
+        custom_created = true
+        if nl then SetLayerColour(nl, CUSTOM_LAYER_RGB[1], CUSTOM_LAYER_RGB[2], CUSTOM_LAYER_RGB[3]) end
+        pcall(function() job:Refresh2DView() end)
+      end
+    end
+  end
   if not dim_auto then              -- Autobemassung aus: alle automatischen Masse aus (Haekchen bleiben gemerkt)
     dim_overall, dim_each, dim_poly, dim_radius, dim_angle = false, false, false, false, false
   end
@@ -1685,7 +1785,20 @@ function main(script_path)
       return best
     end
     -- Masshilfslinie vom Vektor bis knapp ueber die Masslinie (senkrecht zur Masslinie)
+    -- liegt der Punkt schon auf einem Vektor? Dann braucht er keine Hilfslinie
+    local function OnVector(px, py)
+      for _, sg in ipairs(Segments()) do
+        local dx, dy = sg[3] - sg[1], sg[4] - sg[2]
+        local l2 = dx * dx + dy * dy
+        local t = 0
+        if l2 > 0 then t = math.max(0, math.min(1, ((px - sg[1]) * dx + (py - sg[2]) * dy) / l2)) end
+        local qx, qy = sg[1] + t * dx - px, sg[2] + t * dy - py
+        if qx * qx + qy * qy <= touch * touch then return true end
+      end
+      return false
+    end
     local function ExtLine(px, py, nx, ny)
+      if OnVector(px, py) then return end
       local t1, t2 = RayHit(px, py, nx, ny), RayHit(px, py, -nx, -ny)
       local t, sx = t1, 1
       if t2 and (t == nil or t2 < t) then t, sx = t2, -1 end
@@ -1881,6 +1994,10 @@ function main(script_path)
   end
   if dim_each then
     msg = msg .. "\n(" .. n_group .. T(" davon in Gruppen - ohne Einzelmasse)", " of them in groups - no individual dimensions)")
+  end
+  if custom_created then
+    msg = msg .. "\n\n" .. T("Layer \"", "Layer \"") .. PDF_DIM_LAYER ..
+          T("\" fuer die individuelle Bemassung wurde angelegt.", "\" for custom dimensions was created.")
   end
   if vdim_unsure > 0 then
     msg = msg .. "\n\n" .. vdim_unsure ..
