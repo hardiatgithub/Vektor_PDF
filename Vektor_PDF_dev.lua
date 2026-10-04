@@ -34,6 +34,55 @@ local function ColorOps(index)                -- PDF-Operatoren fuer Strich- und
   return col .. " RG " .. col .. " rg"
 end
 local skipped = 0
+local layer_colors = {}                          -- Layer-Id -> Farbe (fuer "Nur ausgewaehlte")
+local layer_color_ok, layer_color_fail = 0, 0   -- Layerfarben gelesen / nicht lesbar
+local layer_color_diag = nil
+
+-- Farbe eines Layers als { r, g, b } (0..1) lesen; je nach API-Version unterschiedlich
+local function ToRGB(a, b, c)
+  if type(a) == "number" and type(b) == "number" and type(c) == "number" then
+    if a > 1 or b > 1 or c > 1 then return { a / 255, b / 255, c / 255 } end
+    return { a, b, c }
+  end
+  if type(a) == "number" then                      -- Windows-COLORREF 0x00BBGGRR
+    local v = math.floor(a)
+    return { (v % 256) / 255, (math.floor(v / 256) % 256) / 255, (math.floor(v / 65536) % 256) / 255 }
+  end
+  if a ~= nil and type(a) ~= "string" and type(a) ~= "boolean" then   -- Objekt mit Farbanteilen
+    for _, k in ipairs({ { "Red", "Green", "Blue" }, { "R", "G", "B" }, { "r", "g", "b" } }) do
+      local ok, r, g, bl = pcall(function() return a[k[1]], a[k[2]], a[k[3]] end)
+      if ok and type(r) == "number" and type(g) == "number" and type(bl) == "number" then
+        return ToRGB(r, g, bl)
+      end
+    end
+  end
+  return nil
+end
+local function LayerColour(layer)
+  for _, key in ipairs({ "Colour", "Color", "GetColour", "GetColor", "ColourRGB", "LayerColour" }) do
+    local ok, v = pcall(function() return layer[key] end)
+    if ok and v ~= nil then
+      local rgb
+      if type(v) == "function" then
+        local ok2, a, b, c = pcall(v, layer)
+        if ok2 then rgb = ToRGB(a, b, c) end
+      else
+        rgb = ToRGB(v)
+      end
+      if rgb then return rgb end
+    end
+  end
+  -- Diagnose fuer die Abschlussmeldung, falls nichts lesbar war
+  if layer_color_diag == nil then
+    local found = {}
+    for _, key in ipairs({ "Colour", "Color", "GetColour", "GetColor", "ColourRGB", "LayerColour" }) do
+      local ok, v = pcall(function() return layer[key] end)
+      if ok and v ~= nil then found[#found + 1] = key .. "=" .. type(v) end
+    end
+    layer_color_diag = (#found > 0) and table.concat(found, ", ") or "keine Farb-Eigenschaft gefunden"
+  end
+  return nil
+end
 local straight_bez = 0   -- gerade Bezier-Kurven, die als Linie behandelt werden
 local skipped_dims = 0   -- davon Vectric-Bemassungen (CadLinearDimensioningObject usw.)
 local bezier_fallback = 0
@@ -340,11 +389,11 @@ local function ObjSheet(obj)
   return nil
 end
 
-local function AddObject(obj, contours, in_group, sheet)
+local function AddObject(obj, contours, in_group, sheet, color)
   if sheet == nil then sheet = ObjSheet(obj) end
   local ok, contour = pcall(function() return obj:GetContour() end)
   if ok and contour ~= nil then
-    contours[#contours + 1] = { contour = contour, in_group = in_group or false, sheet = sheet }
+    contours[#contours + 1] = { contour = contour, in_group = in_group or false, sheet = sheet, color = color }
     return
   end
   local gok, group = pcall(function() return CastCadObjectToCadObjectGroup(obj) end)
@@ -354,7 +403,7 @@ local function AddObject(obj, contours, in_group, sheet)
       while pos ~= nil do
         local child
         child, pos = group:GetNext(pos)
-        AddObject(child, contours, true, sheet)
+        AddObject(child, contours, true, sheet, color)
       end
     end)
     if iok then return end
@@ -439,6 +488,7 @@ end
 
 -- layer_filter: nil = alle sichtbaren Layer, sonst Tabelle { [NormName] = true } der gewaehlten Layer
 local function CollectContours(job, selected_only, dim_layer, layer_filter)
+  layer_colors = {}
   local contours, dim_list = {}, {}
   local info = { names = {}, found = false, hidden = false }
   local dim_name = NormName(dim_layer)
@@ -459,12 +509,18 @@ local function CollectContours(job, selected_only, dim_layer, layer_filter)
     elseif selected_only then use = false
     elseif layer_filter then use = layer_filter[NormName(lname)] == true   -- auch ausgeblendete
     else use = layer.Visible end
+    local lcol = (not is_dim) and LayerColour(layer) or nil
+    if not is_dim then
+      if lcol then layer_color_ok = layer_color_ok + 1 else layer_color_fail = layer_color_fail + 1 end
+      local iok, lid = pcall(function() return tostring(layer.Id) end)
+      if iok and lid ~= nil and lcol then layer_colors[lid] = lcol end
+    end
     if use then
       local pos = layer:GetHeadPosition()
       while pos ~= nil do
         local obj
         obj, pos = layer:GetNext(pos)
-        AddObject(obj, is_dim and dim_list or contours)
+        AddObject(obj, is_dim and dim_list or contours, nil, nil, lcol)
       end
     end
   end
@@ -476,7 +532,8 @@ local function CollectContours(job, selected_only, dim_layer, layer_filter)
     while pos ~= nil do
       local obj
       obj, pos = sel:GetNext(pos)
-      AddObject(obj, contours)
+      local lok, lid = pcall(function() return tostring(obj.LayerId) end)
+      AddObject(obj, contours, nil, nil, lok and layer_colors[lid] or nil)
     end
     -- mit ausgewaehlte Hilfslinien nicht als Zeichnung ausgeben
     local keep = {}
@@ -829,7 +886,6 @@ function main(script_path)
   AddNum("LineWidth", 0.5)
   AddNum("DimLineWidth", 0.25)
   AddNum("ArrowSize", 2.5)
-  dialog:AddRadioGroup("VecColor", reg:GetInt("VecColor", 1))
   AddNum("Margin", 10)
   AddNum("FontSize", 3.5)
   dialog:AddRadioGroup("ScaleMode", reg:GetInt("ScaleMode", 1))
@@ -920,7 +976,7 @@ function main(script_path)
   local line_mm     = GetNum("LineWidth")
   local dim_line_mm = GetNum("DimLineWidth")
   local arrow_mm    = GetNum("ArrowSize")
-  local vec_color   = dialog:GetRadioIndex("VecColor")
+  local vec_color   = 6                                   -- Linien immer in der Layerfarbe
   local margin_mm   = GetNum("Margin")
   local font_mm     = GetNum("FontSize")
   local scale_mode  = dialog:GetRadioIndex("ScaleMode")      -- 1 = A4, 2 = 1:1
@@ -951,7 +1007,6 @@ function main(script_path)
   reg:SetDouble("LineWidth", line_mm)
   reg:SetDouble("DimLineWidth", dim_line_mm)
   reg:SetDouble("ArrowSize", arrow_mm)
-  reg:SetInt("VecColor", vec_color)
   reg:SetDouble("Margin", margin_mm)
   reg:SetDouble("FontSize", font_mm)
   reg:SetInt("ScaleMode", scale_mode)
@@ -1015,6 +1070,7 @@ function main(script_path)
   -- Konturen
   skipped = 0
   skipped_dims = 0
+  layer_color_ok, layer_color_fail, layer_color_diag = 0, 0, nil
   straight_bez = 0
   bezier_fallback = 0
   bezier_info = nil
@@ -1034,6 +1090,7 @@ function main(script_path)
     for _, c in ipairs(contours) do
       local p = ContourToPath(c.contour, seg_len)
       p.in_group = c.in_group
+      p.color = c.color
       paths[#paths + 1] = p
       minx = math.min(minx, p.minx); miny = math.min(miny, p.miny)
       maxx = math.max(maxx, p.maxx); maxy = math.max(maxy, p.maxy)
@@ -1204,7 +1261,17 @@ function main(script_path)
 
     -- 1) Zeichnung
     local s = { f(line_mm * MM) .. " w 1 J 1 j " .. ColorOps(vec_color) }
+    local last_col = nil
     for _, p in ipairs(paths) do
+      if vec_color == 6 then                 -- Farbe des Layers uebernehmen
+        local rgb = p.color or { 0, 0, 0 }
+        if rgb[1] > 0.9 and rgb[2] > 0.9 and rgb[3] > 0.9 then rgb = { 0.6, 0.6, 0.6 } end  -- weiss -> grau
+        local col = string.format("%.3f %.3f %.3f", rgb[1], rgb[2], rgb[3])
+        if col ~= last_col then
+          s[#s + 1] = col .. " RG"
+          last_col = col
+        end
+      end
       for _, cmd in ipairs(p.cmds) do
         local k = cmd[1]
         if k == "m" or k == "l" then
@@ -1478,6 +1545,11 @@ function main(script_path)
             " Vectric dimension(s) skipped - VCarve does not pass their points to gadgets." ..
             "\nFor dimensions in the PDF, draw lines on the dimension layer \"" .. dim_layer .. "\"" ..
             " (2 points = length, 3 points = angle).")
+  end
+  if vec_color == 6 and layer_color_ok == 0 then
+    msg = msg .. T("\n\nHinweis: Layerfarben konnten nicht gelesen werden - Linien schwarz gedruckt.",
+                   "\n\nNote: layer colours could not be read - lines printed in black.") ..
+          "\n(" .. tostring(layer_color_diag) .. ")"
   end
   if straight_bez > 0 then
     msg = msg .. "\n" .. straight_bez .. T(" gerade Kurve(n) als Linie erkannt (werden bemasst)",

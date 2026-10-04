@@ -10,6 +10,9 @@ Neueste Version steht oben.
   (z. B. nur Layer 1 und 3). Auch ausgeblendete Layer können gewählt werden; die Auswahl wird gemerkt.
   Der Maß-Layer folgt weiter seiner eigenen Einstellung. Interne Werkzeugweg-Layer von VCarve
   (z. B. „Werkzeugweg-Vorschauen“) erscheinen nicht in der Liste.
+- **Layerfarbe**: Jede Linie wird automatisch in der Farbe ihres VCarve-Layers gedruckt; die Farbauswahl
+  für die Linien entfällt (die Farbe der Bemaßung bleibt einstellbar)
+  (sehr helle Farben/Weiß werden grau gedruckt, damit sie auf Papier sichtbar bleiben).
 
 ### Geändert
 - **Release-Ablauf** (Beitrag von Gremlin): Entwicklungsdateien heißen jetzt `Vektor_PDF_dev.lua` /
