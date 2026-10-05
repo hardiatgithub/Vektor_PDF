@@ -593,6 +593,35 @@ local function VectricDimLine(job, obj, in_mm, known_k)
     end
     return best, other
   end
+  -- Gerade quer durch den Rahmen: wo schneidet sie Kanten (nur Kanten quer zur Messrichtung)
+  local function CutsAt(hz, c, lo, hi)
+    local cuts = {}
+    for _, sg in ipairs(snap_segs or {}) do
+      local a1, b1, a2, b2
+      if hz then a1, b1, a2, b2 = sg[1], sg[2], sg[3], sg[4] else a1, b1, a2, b2 = sg[2], sg[1], sg[4], sg[3] end
+      if (b1 - c) * (b2 - c) <= 0 and math.abs(b2 - b1) > 1e-9 and math.abs(a2 - a1) <= 0.2 * math.abs(b2 - b1) then
+        local a = a1 + (a2 - a1) * (c - b1) / (b2 - b1)
+        if a >= lo and a <= hi then cuts[#cuts + 1] = a end
+      end
+    end
+    return cuts
+  end
+  -- 0) Mass innerhalb des Bauteils (ohne Hilfslinien): Pfeilspitzen sitzen genau auf zwei Kanten,
+  --    die Zahl steht mittig auf der Masslinie -> Linie durch die Rahmenmitte
+  for _, hz in ipairs({ w >= h, w < h }) do
+    local lo, hi = hz and x0 or y0, hz and x1 or y1
+    local c = hz and (y0 + y1) / 2 or (x0 + x1) / 2
+    if hi - lo > 2 * tol then
+      local at_lo, at_hi = false, false
+      for _, a in ipairs(CutsAt(hz, c, lo - tol, hi + tol)) do
+        if math.abs(a - lo) < tol then at_lo = true end
+        if math.abs(a - hi) < tol then at_hi = true end
+      end
+      if at_lo and at_hi then
+        if hz then return { x0, c, x1, c } else return { c, y0, c, y1 } end
+      end
+    end
+  end
   local hx0, ho0 = Snap(x0, 1, y0 - 2 * h, y1 + 2 * h)
   local hx1, ho1 = Snap(x1, 1, y0 - 2 * h, y1 + 2 * h)
   local vy0, vo0 = Snap(y0, 2, x0 - 2 * w, x1 + 2 * w)
@@ -668,6 +697,31 @@ local function VectricDimLine(job, obj, in_mm, known_k)
             return Make(hz, cuts[i - 1], cuts[i], c), nil
           end
         end
+      end
+    end
+    -- 3) kurze Hilfslinien (Fangpunkt weit weg vom Rahmen): naechsten Punkt genau auf der
+    --    Hoehe der Rahmenenden suchen, beide Punkte muessen auf derselben Seite liegen
+    local hz = w >= h
+    local len, cross = hz and w or h, hz and h or w
+    if len > 2 * cross then
+      local ax = hz and 1 or 2
+      local clo, chi = hz and y0 or x0, hz and y1 or x1
+      local function Far(v)
+        local best, bd = nil, math.huge
+        for _, q in ipairs(verts) do
+          if math.abs(q[ax] - v) < tol then
+            local o = q[3 - ax]
+            local d = (o < clo and clo - o) or (o > chi and o - chi) or 0
+            if d < bd then best, bd = o, d end
+          end
+        end
+        return best
+      end
+      local o0, o1 = Far(hz and x0 or y0), Far(hz and x1 or y1)
+      if o0 and o1 and not ((o0 < clo and o1 > chi) or (o0 > chi and o1 < clo)) then
+        local om = (o0 + o1) / 2
+        local c = (math.abs(chi - om) > math.abs(clo - om)) and (chi - 0.08 * cross) or (clo + 0.08 * cross)
+        if hz then return { x0, c, x1, c } else return { c, y0, c, y1 } end
       end
     end
     return nil
@@ -1010,6 +1064,26 @@ function Draw:angleDim(vx, vy, ax, ay, bx, by, label)
   self:text(px, py, label)
 end
 -- Radius: Pfeil von aussen auf den Bogen (Punkt px,py), Mittelpunkt cx,cy
+-- Kreisdurchmesser: Masslinie innen durch den Mittelpunkt, Pfeile an den Kreis, Zahl darueber.
+-- Ist der Kreis dafuer zu klein: Pfeile von aussen, Zahl rechts daneben (wie bei Vectric).
+function Draw:diameter(cx, cy, r, label)
+  local x1, x2 = cx - r, cx + r
+  if not self:narrow(2 * r, label) then
+    self:line(x1, cy, x2, cy)
+    self:arrowhead(x1, cy, -1, 0)
+    self:arrowhead(x2, cy, 1, 0)
+    -- Zahl ueber der Linie; ist dort belegt, darunter
+    local ty = cy + 1 * MM
+    if not self:boxFree(TextBox(cx, ty, label, self.fs)) then ty = cy - 1 * MM - self.fs * 0.8 end
+    self:text(cx, ty, label)
+  else
+    local e = self.arrow + 2 * MM
+    self:line(x1 - e, cy, x2 + e + 1 * MM, cy)
+    self:arrowhead(x1, cy, 1, 0)
+    self:arrowhead(x2, cy, -1, 0)
+    self:text(x2 + e + 1.5 * MM, cy - self.fs * 0.35, label, nil, false, "left")
+  end
+end
 function Draw:radius(cx, cy, px, py, label, sa, sw)
   local function place(qx, qy, l)
     local dx, dy = qx - cx, qy - cy
@@ -1310,6 +1384,7 @@ function main(script_path)
   dialog:AddTextField("DimCustomLayer", reg:GetString("DimCustomLayer", "pdf_dim"))
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
+  dialog:AddCheckBox("DimCircle", reg:GetBool("DimCircle", true))
   dialog:AddCheckBox("DimPoly", reg:GetBool("DimPoly", false))
   AddNum("MinDim", 25)
   dialog:AddCheckBox("DimRadius", reg:GetBool("DimRadius", false))
@@ -1366,6 +1441,7 @@ function main(script_path)
   local draw_border = dialog:GetCheckBox("DrawBorder")
   local dim_overall = dialog:GetCheckBox("DimOverall")
   local dim_each    = dialog:GetCheckBox("DimEach")
+  local dim_circle  = dialog:GetCheckBox("DimCircle")
   local dim_poly    = dialog:GetCheckBox("DimPoly")
   local min_dim_mm  = GetNum("MinDim")
   if #bad > 0 then
@@ -1396,6 +1472,7 @@ function main(script_path)
   reg:SetBool("DrawBorder", draw_border)
   reg:SetBool("DimOverall", dim_overall)
   reg:SetBool("DimEach", dim_each)
+  reg:SetBool("DimCircle", dim_circle)
   reg:SetBool("DimPoly", dim_poly)
   reg:SetDouble("MinDim", min_dim_mm)
   reg:SetBool("DimRadius", dim_radius)
@@ -1433,7 +1510,7 @@ function main(script_path)
     end
   end
   if not dim_auto then              -- Autobemassung aus: alle automatischen Masse aus (Haekchen bleiben gemerkt)
-    dim_overall, dim_each, dim_poly, dim_radius, dim_angle = false, false, false, false, false
+    dim_overall, dim_each, dim_poly, dim_radius, dim_angle, dim_circle = false, false, false, false, false, false
   end
   reg:SetInt("DimColor", dim_color)
   reg:SetBool("ShowScale", show_scale)
@@ -1614,8 +1691,7 @@ function main(script_path)
           elseif p.closed and not p.in_group and big_enough and pw > tol and ph > tol and
              not (is_total and dim_overall) then
             if p.all_arcs and math.abs(pw - ph) < 0.01 * pw then
-              -- Kreis: Durchmesser ueber dem Kreis
-              cs[#cs + 1] = { tx((p.minx + p.maxx) / 2), ty(p.maxy) + 1.5 * MM, "\195\152 " .. fmt(pw) }
+              -- Kreis: eigener Menuepunkt "Kreis Ø" (siehe unten)
             else
               local same_w = dim_overall and math.abs(p.minx - vminx) < tol and math.abs(p.maxx - vmaxx) < tol
               local same_h = dim_overall and math.abs(p.miny - vminy) < tol and math.abs(p.maxy - vmaxy) < tol
@@ -1626,6 +1702,17 @@ function main(script_path)
                 vs[#vs + 1] = item(ty(p.miny), ty(p.maxy), tx(p.minx), tx(p.minx) - near, fmt(ph))
               end
             end
+          end
+        end
+      end
+      if dim_circle then                   -- Kreise: Radius mit Pfeil von aussen
+        local tol = in_mm and 0.05 or 0.002
+        local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4
+        for _, p in ipairs(paths) do
+          local pw, ph = p.maxx - p.minx, p.maxy - p.miny
+          if p.closed and p.all_arcs and not p.in_group and pw > tol and math.abs(pw - ph) < 0.01 * pw
+             and pw >= min_dim then
+            cs[#cs + 1] = { tx((p.minx + p.maxx) / 2), ty((p.miny + p.maxy) / 2), pw * scale / 2, "R " .. fmt(pw / 2) }
           end
         end
       end
@@ -1665,6 +1752,22 @@ function main(script_path)
         th = item(tx(vminx), tx(vmaxx), ty(vminy), ty(vminy) - far, fmt(vmaxx - vminx))
         tv = item(ty(vminy), ty(vmaxy), tx(vminx), tx(vminx) - far, fmt(vmaxy - vminy))
       end
+      -- doppelte Masse (gleicher Wert, praktisch gleiche Strecke) nur 1x zeigen, auch gegen Gesamtmass
+      local function dedupe(list, total)
+        table.sort(list, function(p, q) return p.ref > q.ref end)   -- naechstgelegenes bleibt
+        local out = {}
+        local function same(p, q)
+          local t = math.max(1.5 * MM, 0.02 * math.abs(q.b - q.a))
+          return p.label == q.label and math.abs(p.a - q.a) < t and math.abs(p.b - q.b) < t
+        end
+        for _, it in ipairs(list) do
+          local dup = total and same(it, total)
+          for _, q in ipairs(out) do if not dup and same(it, q) then dup = true end end
+          if not dup then out[#out + 1] = it end
+        end
+        return out
+      end
+      hs = dedupe(hs, th); vs = dedupe(vs, tv)
       place(hs, th); place(vs, tv)
       -- benoetigter Platz unter bzw. links neben der Zeichnung
       local depth = 0
@@ -1719,7 +1822,11 @@ function main(script_path)
     d:add("q " .. f(dim_line_mm * MM) .. " w " .. ColorOps(dim_color))
     for _, it in ipairs(hdims) do d:hdim(it.a, it.b, it.ref, it.line, it.label) end
     for _, it in ipairs(vdims) do d:vdim(it.a, it.b, it.ref, it.line, it.label) end
-    for _, c in ipairs(cdims) do d:text(c[1], c[2], c[3]) end
+    -- Kreise: Radius mit Pfeil von aussen (schraeg rechts oben, weicht bei Bedarf entlang des Kreises aus)
+    for _, c in ipairs(cdims) do
+      local a0 = math.pi / 4
+      d:radius(c[1], c[2], c[1] + c[3] * math.cos(a0), c[2] + c[3] * math.sin(a0), c[4], a0 - math.pi, 2 * math.pi)
+    end
     for _, l in ipairs(ldims) do d:offsetDim(l[1], l[2], l[3], l[4], l[5], near) end
 
     -- Radien an Boegen (gleiche Radien je Vektor nur einmal)
@@ -1730,7 +1837,7 @@ function main(script_path)
       for _, p in ipairs(paths) do
         local pw, ph = p.maxx - p.minx, p.maxy - p.miny
         local is_circle = p.closed and p.all_arcs and pw > tol and math.abs(pw - ph) < 0.01 * pw
-        if not p.in_group and math.max(pw, ph) >= min_dim and not (is_circle and dim_each) then
+        if not p.in_group and math.max(pw, ph) >= min_dim and not (is_circle and dim_circle) then
           local done = {}
           for _, a in ipairs(p.arcs) do
             local seen = false
@@ -1767,11 +1874,15 @@ function main(script_path)
       for _, p in ipairs(paths) do
         local pw, ph = p.maxx - p.minx, p.maxy - p.miny
         if not p.in_group and math.max(pw, ph) >= min_dim then
+          local shown = {}                 -- geschlossener Vektor: gleicher Winkel nur einmal
           for _, cn in ipairs(PathCorners(p)) do
             local deg = cn[7]
+            local key = fmtAng(deg)
             if math.abs(deg - 90) > 0.5 and deg > 0.5 and deg < 179.5 and
+               not (p.closed and shown[key]) and
                not already(tx(cn[1]), ty(cn[2]), deg) then
-              d:angleDim(tx(cn[1]), ty(cn[2]), tx(cn[3]), ty(cn[4]), tx(cn[5]), ty(cn[6]), fmtAng(deg))
+              shown[key] = true
+              d:angleDim(tx(cn[1]), ty(cn[2]), tx(cn[3]), ty(cn[4]), tx(cn[5]), ty(cn[6]), key)
             end
           end
         end

@@ -27,6 +27,8 @@ Neueste Version steht oben.
 - **Kleine Maße wie bei Vectric**: Passen Pfeile und Zahl nicht zwischen die Hilfslinien, zeigen die Pfeile von
   außen nach innen und die Zahl steht links (bzw. unten) daneben an der verlängerten Maßlinie.
   Auch solche schmalen Vectric-Bemaßungen (z. B. Nutbreite 8 mm zwischen zwei Linien) werden jetzt erkannt.
+- **Kreise** als eigener Punkt im Menü der Autobemaßung: Radius „R …“ mit Pfeil von außen auf den Kreis;
+  bei mehreren Kreisen weicht die Beschriftung entlang des Kreises aus.
 - **Beschriftungen überlappen nicht mehr**: Radien an konzentrischen Bögen weichen entlang des Bogens
   seitlich aus (sonst gestaffelte Hinweislinien), gleiche Bögen werden nur einmal beschriftet; Zahlen schräger Maße weichen entlang der Maßlinie aus (z. B. bei sich kreuzenden Diagonalen).
 - Hinweis, wenn das PDF nicht geschrieben werden kann, weil es noch geöffnet ist.
@@ -46,6 +48,11 @@ Neueste Version steht oben.
 - **Winkelmaße übersichtlicher**: kleinere Maßbögen (4–10 mm, passend zur Schenkellänge); Zahlen weichen
   anderen Zahlen aus; gleiche Winkel dicht nebeneinander (z. B. Innen- und Außenkontur einer Doppellinie)
   werden bei „Winkel an Ecken“ nur einmal bemaßt.
+- „Winkel an Ecken“: Kommt in einem geschlossenen Vektor derselbe Winkel mehrmals vor, wird er nur einmal angezeigt.
+- **Keine doppelten Maßketten**: Zwei Maßlinien mit gleichem Wert über praktisch derselben Strecke
+  (z. B. Innen- und Außenkontur einer Doppellinie, oder ein Einzelmaß gleich dem Gesamtmaß) werden nur einmal gezeichnet.
+- **Vectric-Bemaßung erweitert**: Maße *innerhalb* des Bauteils (Pfeile direkt auf den Kanten, Zahl mittig) werden
+  jetzt erkannt und mittig gezeichnet; Maße mit kurzen Hilfslinien (Fangpunkt weit vom Maß entfernt) werden ebenfalls übernommen.
 - **Längenmaße mit Abstand**: Einzel- und Gesamtmaße, die sich überschneiden würden, werden automatisch
   in eigene Reihen nach außen versetzt – keine Maßlinie und keine Zahl liegt mehr auf einer anderen.
   Der Platz am Blattrand wird dafür automatisch vergrößert.
