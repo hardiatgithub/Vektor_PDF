@@ -237,6 +237,56 @@ local function PathCorners(p)
   return corners
 end
 
+-- Bezier-Kurve, die ein Kreisbogen ist (z. B. Verrundung)? -> wie ArcInfo, sonst nil
+-- at(t) liefert den Kurvenpunkt bei t (0..1)
+local function BezierArcInfo(x0, y0, x3, y3, at)
+  local mx, my = at(0.5)
+  if not mx then return nil end
+  -- Kreis durch Anfang, Mitte, Ende
+  local ax, ay, bx, by = mx - x0, my - y0, x3 - x0, y3 - y0
+  local d = 2 * (ax * by - ay * bx)
+  if math.abs(d) < 1e-12 then return nil end
+  local a2, b2 = ax * ax + ay * ay, bx * bx + by * by
+  local ux, uy = (by * a2 - ay * b2) / d, (ax * b2 - bx * a2) / d
+  local cx, cy = x0 + ux, y0 + uy
+  local r = math.sqrt(ux * ux + uy * uy)
+  local chord = math.sqrt(bx * bx + by * by)
+  local sag = math.abs(ax * by - ay * bx) / chord                -- Pfeilhoehe des Bogens
+  local tol = math.min(0.01 * r, 0.005 * chord, 0.05 * sag)        -- erlaubte Abweichung
+  for _, t in ipairs({ 0.125, 0.25, 0.375, 0.625, 0.75, 0.875 }) do
+    local qx, qy = at(t)
+    if not qx or math.abs(math.sqrt((qx - cx) ^ 2 + (qy - cy) ^ 2) - r) > tol then return nil end
+  end
+  local sa = atan2(y0 - cy, x0 - cx)
+  local ea = atan2(y3 - cy, x3 - cx)
+  local am = atan2(my - cy, mx - cx)
+  local tp = 2 * math.pi
+  local ccw = (ea - sa) % tp
+  local sw = (((am - sa) % tp) < ccw) and ccw or (ccw - tp)
+  if math.abs(sw) > math.pi * 1.01 then return nil end      -- mehr als Halbkreis: lieber nicht
+  return { cx = cx, cy = cy, r = r, px = mx, py = my, sa = sa, sw = sw }
+end
+
+-- Kreis? Aus Boegen oder aus Bezier-Kurven (z. B. importierte Kreise): alle Punkte
+-- gleich weit vom Mittelpunkt, Rahmen quadratisch, keine geraden Stuecke
+local function IsCircle(p, tol)
+  local pw, ph = p.maxx - p.minx, p.maxy - p.miny
+  if not p.closed or pw <= tol or math.abs(pw - ph) >= 0.01 * pw then return false end
+  if p.all_arcs then return true end
+  for _, sg in ipairs(p.segs) do if sg then return false end end
+  local cx, cy, r = (p.minx + p.maxx) / 2, (p.miny + p.maxy) / 2, pw / 2
+  local n = 0
+  for _, c in ipairs(p.cmds) do
+    local x, y
+    if c[1] == "m" or c[1] == "l" then x, y = c[2], c[3] elseif c[1] == "c" then x, y = c[6], c[7] end
+    if x then
+      n = n + 1
+      if math.abs(math.sqrt((x - cx) ^ 2 + (y - cy) ^ 2) - r) > 0.015 * r then return false end
+    end
+  end
+  return n >= 4
+end
+
 -- Kontur -> { cmds = {...}, arcs = {...}, closed, all_arcs, minx, miny, maxx, maxy }
 local function ContourToPath(contour, seg_len)
   local p = { cmds = {}, arcs = {}, segs = {}, all_arcs = true, closed = contour.IsClosed,
@@ -281,6 +331,21 @@ local function ContourToPath(contour, seg_len)
         end
         return false
       end
+      -- Kreisbogen aus Bezier (fuer Radius-Masse)
+      local at = nil
+      if c1 and c2 then
+        at = function(t)
+          local u = 1 - t
+          local a, b, c, e = u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t
+          return a * p1.X + b * c1[1] + c * c2[1] + e * p2.X, a * p1.Y + b * c1[2] + c * c2[2] + e * p2.Y
+        end
+      elseif pts and #pts >= 8 then
+        at = function(t)
+          local i = math.floor(t * #pts + 0.5)
+          if i < 1 then return p1.X, p1.Y end
+          return pts[i][1], pts[i][2]
+        end
+      end
       if Straight() then
         straight_bez = straight_bez + 1
         cmds[#cmds + 1] = { "l", p2.X, p2.Y }
@@ -288,11 +353,15 @@ local function ContourToPath(contour, seg_len)
       elseif c1 and c2 then
         p.segs[#p.segs + 1] = false
         cmds[#cmds + 1] = { "c", c1[1], c1[2], c2[1], c2[2], p2.X, p2.Y }
+        local ai = BezierArcInfo(p1.X, p1.Y, p2.X, p2.Y, at)
+        if ai then p.arcs[#p.arcs + 1] = ai end
       else
         p.segs[#p.segs + 1] = false
         if pts then
           for _, q in ipairs(pts) do cmds[#cmds + 1] = { "l", q[1], q[2] } end
           cmds[#cmds] = { "l", p2.X, p2.Y }
+          local ai = at and BezierArcInfo(p1.X, p1.Y, p2.X, p2.Y, at)
+          if ai then p.arcs[#p.arcs + 1] = ai end
         else
           bezier_fallback = bezier_fallback + 1    -- nichts lesbar -> Gerade
           BezierDiagnose(bez)
@@ -1388,6 +1457,7 @@ function main(script_path)
   dialog:AddCheckBox("DimPoly", reg:GetBool("DimPoly", false))
   AddNum("MinDim", 25)
   dialog:AddCheckBox("DimRadius", reg:GetBool("DimRadius", false))
+  dialog:AddCheckBox("DimRadiusOnce", reg:GetBool("DimRadiusOnce", true))
   dialog:AddCheckBox("DimAngle", reg:GetBool("DimAngle", false))
   dialog:AddRadioGroup("DimColor", reg:GetInt("DimColor", 1))
   dialog:AddCheckBox("ShowScale", reg:GetBool("ShowScale", true))
@@ -1450,6 +1520,7 @@ function main(script_path)
     return false
   end
   local dim_radius  = dialog:GetCheckBox("DimRadius")
+  local radius_once = dialog:GetCheckBox("DimRadiusOnce")
   local dim_angle   = dialog:GetCheckBox("DimAngle")
   local dim_auto    = dialog:GetCheckBox("DimAuto")
   custom_dims       = dialog:GetCheckBox("DimCustom")
@@ -1476,6 +1547,7 @@ function main(script_path)
   reg:SetBool("DimPoly", dim_poly)
   reg:SetDouble("MinDim", min_dim_mm)
   reg:SetBool("DimRadius", dim_radius)
+  reg:SetBool("DimRadiusOnce", radius_once)
   reg:SetBool("DimAngle", dim_angle)
   reg:SetBool("DimAuto", dim_auto)
   reg:SetBool("DimCustom", custom_dims)
@@ -1690,7 +1762,7 @@ function main(script_path)
             StraightDim(s1, min_dim, tol)
           elseif p.closed and not p.in_group and big_enough and pw > tol and ph > tol and
              not (is_total and dim_overall) then
-            if p.all_arcs and math.abs(pw - ph) < 0.01 * pw then
+            if IsCircle(p, tol) then
               -- Kreis: eigener Menuepunkt "Kreis Ø" (siehe unten)
             else
               local same_w = dim_overall and math.abs(p.minx - vminx) < tol and math.abs(p.maxx - vmaxx) < tol
@@ -1710,8 +1782,7 @@ function main(script_path)
         local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4
         for _, p in ipairs(paths) do
           local pw, ph = p.maxx - p.minx, p.maxy - p.miny
-          if p.closed and p.all_arcs and not p.in_group and pw > tol and math.abs(pw - ph) < 0.01 * pw
-             and pw >= min_dim then
+          if not p.in_group and IsCircle(p, tol) then   -- Kreise unabhaengig von "Einzelmasse ab"
             cs[#cs + 1] = { tx((p.minx + p.maxx) / 2), ty((p.miny + p.maxy) / 2), pw * scale / 2, "R " .. fmt(pw / 2) }
           end
         end
@@ -1829,19 +1900,21 @@ function main(script_path)
     end
     for _, l in ipairs(ldims) do d:offsetDim(l[1], l[2], l[3], l[4], l[5], near) end
 
-    -- Radien an Boegen (gleiche Radien je Vektor nur einmal)
+    -- Radien an Boegen: alle Boegen; mit "gleiche Radien nur einmal" je Vektor jeder Radius nur 1x
     if dim_radius then
       local tol = in_mm and 0.05 or 0.002
       local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4
       local all_done = {}                  -- gleicher Bogen (Mittelpunkt + Radius) nur einmal
       for _, p in ipairs(paths) do
         local pw, ph = p.maxx - p.minx, p.maxy - p.miny
-        local is_circle = p.closed and p.all_arcs and pw > tol and math.abs(pw - ph) < 0.01 * pw
+        local is_circle = IsCircle(p, tol)
         if not p.in_group and math.max(pw, ph) >= min_dim and not (is_circle and dim_circle) then
           local done = {}
           for _, a in ipairs(p.arcs) do
             local seen = false
-            for _, r in ipairs(done) do if math.abs(r - a.r) < tol then seen = true end end
+            if radius_once then
+              for _, r in ipairs(done) do if math.abs(r - a.r) < tol then seen = true end end
+            end
             for _, q in ipairs(all_done) do
               if math.abs(q.r - a.r) < tol and math.abs(q.cx - a.cx) < tol and math.abs(q.cy - a.cy) < tol then seen = true end
             end

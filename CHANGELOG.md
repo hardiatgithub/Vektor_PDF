@@ -53,6 +53,12 @@ Neueste Version steht oben.
   (z. B. Innen- und Außenkontur einer Doppellinie, oder ein Einzelmaß gleich dem Gesamtmaß) werden nur einmal gezeichnet.
 - **Vectric-Bemaßung erweitert**: Maße *innerhalb* des Bauteils (Pfeile direkt auf den Kanten, Zahl mittig) werden
   jetzt erkannt und mittig gezeichnet; Maße mit kurzen Hilfslinien (Fangpunkt weit vom Maß entfernt) werden ebenfalls übernommen.
+- **Kreis R auch für kleine Kreise**: Kreise bekommen ihr Radiusmaß unabhängig von „Einzelmaße ab“ (z. B. Bohrungen);
+  Kreise aus Bezier-Kurven (z. B. importiert) werden jetzt ebenfalls als Kreis erkannt.
+- **Radien auch an Bezier-Bögen**: Verrundungen, die als Bezier-Kurve vorliegen (z. B. nach Knotenbearbeitung oder Import),
+  werden als Kreisbogen erkannt und bei „Radien an Bögen“ bemaßt. Freie Kurven bleiben unbemaßt.
+- „Radien an Bögen“ bemaßt jetzt jeden Bogen; neuer Schalter darunter **„gleiche Radien nur einmal (je Vektor)“**
+  (Standard: ein) zeigt einen gleichen Radius pro Vektor nur einmal.
 - **Längenmaße mit Abstand**: Einzel- und Gesamtmaße, die sich überschneiden würden, werden automatisch
   in eigene Reihen nach außen versetzt – keine Maßlinie und keine Zahl liegt mehr auf einer anderen.
   Der Platz am Blattrand wird dafür automatisch vergrößert.
