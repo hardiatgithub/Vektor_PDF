@@ -264,7 +264,7 @@ local function BezierArcInfo(x0, y0, x3, y3, at)
   local ccw = (ea - sa) % tp
   local sw = (((am - sa) % tp) < ccw) and ccw or (ccw - tp)
   if math.abs(sw) > math.pi * 1.01 then return nil end      -- mehr als Halbkreis: lieber nicht
-  return { cx = cx, cy = cy, r = r, px = mx, py = my, sa = sa, sw = sw }
+  return { cx = cx, cy = cy, r = r, px = mx, py = my, sa = sa, sw = sw, bez = true }
 end
 
 -- Kreis? Aus Boegen oder aus Bezier-Kurven (z. B. importierte Kreise): alle Punkte
@@ -589,10 +589,11 @@ local PDF_DIM_LAYER = "pdf_dim"     -- Layer fuer selbst gezeichnete Masslinien 
 local custom_dims = true            -- Schalter "Individuelle Bemassung"
 local snap_verts = nil              -- Fangpunkte aller Vektoren (einmal je Lauf)
 local snap_segs = nil               -- gerade Stuecke aller Vektoren (fuer schmale Masse)
+local snap_arcs = nil               -- Kreisboegen aller Vektoren (fuer Radius-Masse)
 
 local function SnapVerts(job, in_mm)
   if snap_verts then return snap_verts end
-  snap_verts, snap_segs = {}, {}
+  snap_verts, snap_segs, snap_arcs = {}, {}, {}
   pcall(function()
     local lm = job.LayerManager
     local lpos = lm:GetHeadPosition()
@@ -623,6 +624,19 @@ local function SnapVerts(job, in_mm)
                 elseif cmd[1] == "c" then snap_segs[#snap_segs + 1] = { lx, ly, cmd[6], cmd[7] }; lx, ly = cmd[6], cmd[7]
                 elseif cmd[1] == "h" and sx then snap_segs[#snap_segs + 1] = { lx, ly, sx, sy } end
               end
+              -- Kreisboegen: genaue Extrempunkte (0/90/180/270 Grad) als Fangpunkte
+              for _, a in ipairs(p.arcs) do
+                snap_arcs[#snap_arcs + 1] = a
+                -- nur bei echten Boegen: Bezier-Kreise haben ihre Scheitel schon als Knoten,
+                -- der angenaeherte Mittelpunkt waere minimal ungenau (z. B. 11.999 statt 12.000)
+                for k = 0, (a.bez and -1 or 3) do
+                  local ang = k * math.pi / 2
+                  local t = (a.sw >= 0) and ((ang - a.sa) % (2 * math.pi)) or ((a.sa - ang) % (2 * math.pi))
+                  if t <= math.abs(a.sw) + 1e-9 then
+                    snap_verts[#snap_verts + 1] = { a.cx + a.r * math.cos(ang), a.cy + a.r * math.sin(ang) }
+                  end
+                end
+              end
             end)
           else
             pcall(function()
@@ -651,13 +665,39 @@ local function VectricDimLine(job, obj, in_mm, known_k)
   if not okb or box == nil then return nil end
   local x0, y0, x1, y1 = box.MinX, box.MinY, box.MaxX, box.MaxY
   local w, h = x1 - x0, y1 - y0
+  -- Radius-Mass (kein lineares Mass): eine Rahmenecke = Pfeilspitze auf einem Kreisbogen
+  local okc, cname = pcall(function() return obj.ClassName end)
+  cname = (okc and type(cname) == "string") and cname or ""
+  if cname ~= "" and not cname:find("Linear") then
+    local tb = math.max(2 * tol, 0.04 * math.max(w, h))
+    local best, bd = nil, tb
+    for _, a in ipairs(snap_arcs or {}) do
+      for _, c in ipairs({ { x0, y0 }, { x1, y0 }, { x0, y1 }, { x1, y1 } }) do
+        local dd = math.abs(math.sqrt((c[1] - a.cx) ^ 2 + (c[2] - a.cy) ^ 2) - a.r)
+        if dd < bd then best, bd = { a = a, x = c[1], y = c[2] }, dd end
+      end
+    end
+    if best then
+      local a = best.a
+      local ang = atan2(best.y - a.cy, best.x - a.cx)
+      local px, py = a.cx + a.r * math.cos(ang), a.cy + a.r * math.sin(ang)
+      return { a.cx, a.cy, px, py, radius = true, cx = a.cx, cy = a.cy, r = a.r, px = px, py = py }
+    end
+    return nil
+  end
   local function Snap(v, ax, lo, hi)
-    local best, bd, other = v, tol, nil
+    -- Punkt auf Hoehe v; bei mehreren den naechsten am Rahmen (Hilfslinie fuehrt dorthin),
+    -- nicht einen gleich hohen Punkt an einem anderen Teil
+    local clo, chi = (ax == 1) and y0 or x0, (ax == 1) and y1 or x1
+    local best, bs, other = v, math.huge, nil
     for _, q in ipairs(verts) do
       local o = q[3 - ax]
-      if o >= lo and o <= hi then
-        local dd = math.abs(q[ax] - v)
-        if dd < bd then best, bd, other = q[ax], dd, o end
+      local dd = math.abs(q[ax] - v)
+      if o >= lo and o <= hi and dd < tol then
+        local cd = (o < clo and clo - o) or (o > chi and o - chi) or 0
+        local sc = dd + 0.001 * cd        -- genauester Treffer (z. B. Kreis-Scheitel), bei Gleichstand der naechste
+        -- Hilfslinie reicht bis knapp an den Messpunkt; weit entfernte Punkte -> Rueckfall 3)
+        if cd <= math.max(3 * tol, 0.15 * (chi - clo)) and sc < bs then best, bs, other = q[ax], sc, o end
       end
     end
     return best, other
@@ -768,6 +808,47 @@ local function VectricDimLine(job, obj, in_mm, known_k)
         end
       end
     end
+    -- 3a) schraeges (paralleles) Mass: Messpunkte P1, P2 am Bauteil; die Hilfslinien laufen senkrecht
+    --     zu P1-P2 von Abstand g (Luecke zum Bauteil) bis D (knapp ueber der Masslinie). Der Rahmen
+    --     ist der Umriss dieser beiden Hilfslinien -> g und D aus x und y getrennt berechnen, muessen passen.
+    do
+      local tb = math.max(2 * tol, 0.03 * math.max(w, h))
+      local ex = 0.3 * math.max(w, h)
+      local cand = {}
+      for _, q in ipairs(verts) do
+        if q[1] > x0 - ex and q[1] < x1 + ex and q[2] > y0 - ex and q[2] < y1 + ex and #cand < 150 then
+          cand[#cand + 1] = q
+        end
+      end
+      local best, berr = nil, 2 * tb
+      for i = 1, #cand do
+        for j = i + 1, #cand do
+          local P1, P2 = cand[i], cand[j]
+          local ux, uy = P2[1] - P1[1], P2[2] - P1[2]
+          local L = math.sqrt(ux * ux + uy * uy)
+          if L > 3 * tb and math.abs(ux) > 0.05 * L and math.abs(uy) > 0.05 * L then
+            for _, sg in ipairs({ 1, -1 }) do
+              local nx, ny = -uy / L * sg, ux / L * sg
+              local function GD(p1, p2, n, lo, hi)
+                if n > 0 then return (lo - math.min(p1, p2)) / n, (hi - math.max(p1, p2)) / n end
+                return (hi - math.max(p1, p2)) / n, (lo - math.min(p1, p2)) / n
+              end
+              local gx, dx = GD(P1[1], P2[1], nx, x0, x1)
+              local gy, dy = GD(P1[2], P2[2], ny, y0, y1)
+              local g, D = (gx + gy) / 2, (dx + dy) / 2
+              local err = math.abs(gx - gy) + math.abs(dx - dy)
+              if err < berr and g > -tb and D > g + 2 * tb and g < 0.6 * D then
+                local k = D - 0.08 * (D - g)            -- Masslinie knapp innerhalb der Hilfslinien-Enden
+                best = { P1[1] + nx * k, P1[2] + ny * k, P2[1] + nx * k, P2[2] + ny * k,
+                         p1 = { P1[1], P1[2] }, p2 = { P2[1], P2[2] } }
+                berr = err
+              end
+            end
+          end
+        end
+      end
+      if best then return best end
+    end
     -- 3) kurze Hilfslinien (Fangpunkt weit weg vom Rahmen): naechsten Punkt genau auf der
     --    Hoehe der Rahmenenden suchen, beide Punkte muessen auf derselben Seite liegen
     local hz = w >= h
@@ -790,7 +871,8 @@ local function VectricDimLine(job, obj, in_mm, known_k)
       if o0 and o1 and not ((o0 < clo and o1 > chi) or (o0 > chi and o1 < clo)) then
         local om = (o0 + o1) / 2
         local c = (math.abs(chi - om) > math.abs(clo - om)) and (chi - 0.08 * cross) or (clo + 0.08 * cross)
-        if hz then return { x0, c, x1, c } else return { c, y0, c, y1 } end
+        if hz then return { x0, c, x1, c, p1 = { x0, o0 }, p2 = { x1, o1 } } end
+        return { c, y0, c, y1, p1 = { o0, y0 }, p2 = { o1, y1 } }
       end
     end
     return nil
@@ -799,11 +881,13 @@ local function VectricDimLine(job, obj, in_mm, known_k)
   if horiz then
     local oy = (ho0 + ho1) / 2
     local y = (math.abs(y1 - oy) > math.abs(y0 - oy)) and (y1 - 0.08 * h) or (y0 + 0.08 * h)
-    return { hx0, y, hx1, y }
+    -- Masszahl aus den Hilfslinien selbst (Rahmenkanten = exakte Messpunkte von Vectric),
+    -- der Fangpunkt bestimmt nur, wohin die Hilfslinie fuehrt
+    return { x0, y, x1, y, p1 = { x0, ho0 }, p2 = { x1, ho1 } }
   else
     local ox = (vo0 + vo1) / 2
     local x = (math.abs(x1 - ox) > math.abs(x0 - ox)) and (x1 - 0.08 * w) or (x0 + 0.08 * w)
-    return { x, vy0, x, vy1 }
+    return { x, y0, x, y1, p1 = { vo0, y0 }, p2 = { vo1, y1 } }
   end
 end
 
@@ -1695,22 +1779,26 @@ function main(script_path)
 
     -- Seitenaufteilung; res = Platz fuer Masse links und unten (wird bei Bedarf vergroessert)
     local page_w, page_h, scale, offx, offy
+    -- Radius-Beschriftungen ("R ..." mit Pfeil von aussen) brauchen rechts/oben Platz
+    local has_r = dim_radius or dim_circle
+    for _, l in ipairs(dim_lines) do if l.radius then has_r = true end end
+    local rres = has_r and (TextWidth("R 000.000\"", fs) + 8 * MM) or 0
     local function Layout(res)
       if scale_mode == 2 then
         scale  = unit_pt
-        page_w = w * scale + 2 * margin + res
-        page_h = h * scale + 2 * margin + res + title_res + foot_res
+        page_w = w * scale + 2 * margin + res + rres
+        page_h = h * scale + 2 * margin + res + title_res + foot_res + rres
       else
         page_w, page_h = 595.28, 841.89
         local landscape = (orient == 3) or (orient ~= 2 and w > h)
         if landscape then page_w, page_h = page_h, page_w end
-        scale = math.min((page_w - 2 * margin - res) / w,
-                         (page_h - 2 * margin - res - title_res - foot_res) / h)
+        scale = math.min((page_w - 2 * margin - res - rres) / w,
+                         (page_h - 2 * margin - res - title_res - foot_res - rres) / h)
       end
       local area_x = margin + res
       local area_y = margin + res + foot_res
-      local area_w = page_w - margin - area_x
-      local area_h = page_h - margin - title_res - area_y
+      local area_w = page_w - margin - area_x - rres
+      local area_h = page_h - margin - title_res - area_y - rres
       offx = area_x + (area_w - w * scale) / 2
       offy = area_y + (area_h - h * scale) / 2
     end
@@ -2051,8 +2139,21 @@ function main(script_path)
       local ux, uy = (ax - bx) / len, (ay - by) / len        -- vom Vektor zur Masslinie
       d:line(bx + ux * gap, by + uy * gap, ax + ux * over, ay + uy * over)
     end
+    -- Hilfslinie vom bekannten Messpunkt (px, py) zum Masslinien-Ende (ex, ey)
+    local function ExtTo(px, py, ex, ey)
+      local ax, ay = tx(ex), ty(ey)
+      local bx, by = tx(px), ty(py)
+      local len = math.sqrt((bx - ax) ^ 2 + (by - ay) ^ 2)
+      local gap, over = EXT_GAP, 1.5 * MM
+      if len <= gap + 0.1 then return end
+      local ux, uy = (ax - bx) / len, (ay - by) / len
+      d:line(bx + ux * gap, by + uy * gap, ax + ux * over, ay + uy * over)
+    end
     for _, l in ipairs(dim_lines) do
-      if l.angle then
+      if l.radius then
+        local a0 = atan2(l.py - l.cy, l.px - l.cx)
+        d:radius(tx(l.cx), ty(l.cy), tx(l.px), ty(l.py), "R " .. fmt(l.r), a0 - math.pi, 2 * math.pi)
+      elseif l.angle then
         local a1 = atan2(l[2] - l.vy, l[1] - l.vx)
         local sw = atan2(l[4] - l.vy, l[3] - l.vx) - a1
         while sw > math.pi do sw = sw - 2 * math.pi end
@@ -2063,8 +2164,13 @@ function main(script_path)
         local len = math.sqrt((l[3] - l[1]) ^ 2 + (l[4] - l[2]) ^ 2)
         if len > 0 and #paths > 0 then
           local nx, ny = -(l[4] - l[2]) / len, (l[3] - l[1]) / len
-          ExtLine(l[1], l[2], nx, ny)
-          ExtLine(l[3], l[4], nx, ny)
+          if l.p1 then                     -- Vectric-Mass: Messpunkte am Bauteil bekannt
+            ExtTo(l.p1[1], l.p1[2], l[1], l[2])
+            ExtTo(l.p2[1], l.p2[2], l[3], l[4])
+          else
+            ExtLine(l[1], l[2], nx, ny)
+            ExtLine(l[3], l[4], nx, ny)
+          end
         end
         d:alignedDim(tx(l[1]), ty(l[2]), tx(l[3]), ty(l[4]), (fmt(len)))
       end

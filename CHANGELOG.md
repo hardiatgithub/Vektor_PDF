@@ -59,6 +59,12 @@ Neueste Version steht oben.
   werden als Kreisbogen erkannt und bei „Radien an Bögen“ bemaßt. Freie Kurven bleiben unbemaßt.
 - „Radien an Bögen“ bemaßt jetzt jeden Bogen; neuer Schalter darunter **„gleiche Radien nur einmal (je Vektor)“**
   (Standard: ein) zeigt einen gleichen Radius pro Vektor nur einmal.
+- **Vectric-Bemaßung: schräge (parallele) Maße** werden jetzt übernommen (z. B. Diagonale eines Rechtecks).
+- Vectric-Bemaßung: Hilfslinien führen jetzt immer zum gemessenen Punkt am richtigen Bauteil
+  (vorher konnte z. B. am Kreis-Scheitel ein Nachbarteil getroffen werden).
+- Vectric-Bemaßung: **Radiusmaße** werden übernommen (als „R …“ mit Pfeil von außen); Maße an Kreisen
+  zeigen jetzt exakt den Vectric-Wert (Maßzahl aus den Vectric-Hilfslinien, vorher z. B. 11.999 statt 12.000).
+- Radius-Beschriftungen bekommen rechts/oben eigenen Platz auf der Seite (wurden am Rand abgeschnitten).
 - **Längenmaße mit Abstand**: Einzel- und Gesamtmaße, die sich überschneiden würden, werden automatisch
   in eigene Reihen nach außen versetzt – keine Maßlinie und keine Zahl liegt mehr auf einer anderen.
   Der Platz am Blattrand wird dafür automatisch vergrößert.
