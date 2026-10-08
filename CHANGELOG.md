@@ -73,6 +73,8 @@ Neueste Version steht oben.
   bekommen ihr R-Maß dann von innen statt mit Pfeil von außen.
 - Vectric schräge Maße: Messpunkte werden zuerst an Ecken/Bogen-Enden gesucht (vorher konnte z. B. bei einem
   Sehnenmaß über einen Bogen ein Punkt mitten auf dem Bogen gewählt werden: 64.9 statt 70.7).
+- **Vectric-Winkelmaße** werden übernommen: Scheitel und Schenkel werden gesucht, Maßbogen mit gleichem Radius und
+  auf derselben Seite wie in VCarve (auch Winkel über 180°).
 - **Längenmaße mit Abstand**: Einzel- und Gesamtmaße, die sich überschneiden würden, werden automatisch
   in eigene Reihen nach außen versetzt – keine Maßlinie und keine Zahl liegt mehr auf einer anderen.
   Der Platz am Blattrand wird dafür automatisch vergrößert.

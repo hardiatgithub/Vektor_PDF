@@ -669,9 +669,81 @@ local function VectricDimLine(job, obj, in_mm, known_k)
   if not okb or box == nil then return nil end
   local x0, y0, x1, y1 = box.MinX, box.MinY, box.MaxX, box.MaxY
   local w, h = x1 - x0, y1 - y0
-  -- Radius-Mass (kein lineares Mass): eine Rahmenecke = Pfeilspitze auf einem Kreisbogen
   local okc, cname = pcall(function() return obj.ClassName end)
   cname = (okc and type(cname) == "string") and cname or ""
+  -- Winkelmass: Ecke (Scheitel) mit zwei geraden Schenkeln suchen, deren Masbogen genau in den
+  -- Rahmen passt (der Rahmen = Bogen + Zahl; der Bogen beruehrt mindestens 2 Rahmenkanten)
+  if cname:find("Angle") then
+    local tb = math.max(2 * tol, 0.03 * math.max(w, h))
+    local ex = 3 * math.max(w, h)
+    -- Scheitel: Punkte, an denen mindestens zwei gerade Stuecke enden
+    local nodes, list = {}, {}
+    local function key(x, y) return math.floor(x / tol + 0.5) .. ":" .. math.floor(y / tol + 0.5) end
+    for _, sg in ipairs(snap_segs or {}) do
+      local L = math.sqrt((sg[3] - sg[1]) ^ 2 + (sg[4] - sg[2]) ^ 2)
+      if L > 3 * tol then                          -- keine Bogen-Abtaststuecke
+        for _, e in ipairs({ { sg[1], sg[2], sg[3], sg[4] }, { sg[3], sg[4], sg[1], sg[2] } }) do
+          if e[1] > x0 - ex and e[1] < x1 + ex and e[2] > y0 - ex and e[2] < y1 + ex then
+            local k = key(e[1], e[2])
+            local n = nodes[k]
+            if not n then n = { x = e[1], y = e[2], legs = {} }; nodes[k] = n; list[#list + 1] = n end
+            n.legs[#n.legs + 1] = { atan2(e[4] - e[2], e[3] - e[1]), L, e[3], e[4] }
+          end
+        end
+      end
+    end
+    local best, bcount, bres = nil, 1, math.huge
+    local tp = 2 * math.pi
+    for _, n in ipairs(list) do
+      for i = 1, #n.legs do
+        for j = 1, #n.legs do
+          local A, B = n.legs[i], n.legs[j]
+          local sw = (B[1] - A[1]) % tp                  -- gegen den Uhrzeigersinn von Schenkel A nach B
+          if i ~= j and sw > 0.01 and sw < tp - 0.01 then
+            -- Rahmen des Einheitsbogens (Enden + 0/90/180/270 Grad im Bogen)
+            local ux0, uy0, ux1, uy1 = math.huge, math.huge, -math.huge, -math.huge
+            local function add(a)
+              local c, s2 = math.cos(a), math.sin(a)
+              ux0, ux1 = math.min(ux0, c), math.max(ux1, c)
+              uy0, uy1 = math.min(uy0, s2), math.max(uy1, s2)
+            end
+            add(A[1]); add(A[1] + sw)
+            for k = 0, 3 do
+              local q = k * math.pi / 2
+              if (q - A[1]) % tp <= sw then add(q) end
+            end
+            for _, withV in ipairs({ false, true }) do
+              local vx0, vy0, vx1, vy1 = ux0, uy0, ux1, uy1
+              if withV then vx0, vy0, vx1, vy1 = math.min(vx0, 0), math.min(vy0, 0), math.max(vx1, 0), math.max(vy1, 0) end
+              local rs = {}
+              if vx0 < -1e-6 then rs[#rs + 1] = (n.x - x0) / -vx0 end
+              if vx1 > 1e-6 then rs[#rs + 1] = (x1 - n.x) / vx1 end
+              if vy0 < -1e-6 then rs[#rs + 1] = (n.y - y0) / -vy0 end
+              if vy1 > 1e-6 then rs[#rs + 1] = (y1 - n.y) / vy1 end
+              for _, r in ipairs(rs) do
+                if r > tb then
+                  local ax0, ay0, ax1, ay1 = n.x + r * vx0, n.y + r * vy0, n.x + r * vx1, n.y + r * vy1
+                  if ax0 > x0 - tb and ay0 > y0 - tb and ax1 < x1 + tb and ay1 < y1 + tb then
+                    local cnt, res = 0, 0
+                    for _, dd in ipairs({ math.abs(ax0 - x0), math.abs(ay0 - y0), math.abs(ax1 - x1), math.abs(ay1 - y1) }) do
+                      if dd < tb then cnt = cnt + 1; res = res + dd end
+                    end
+                    if cnt > bcount or (cnt == bcount and res < bres) then
+                      bcount, bres = cnt, res
+                      best = { A[3], A[4], B[3], B[4], angle = true, vx = n.x, vy = n.y,
+                               vsa = A[1], vsw = sw, vr = r }
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+    return best
+  end
+  -- Radius-Mass (kein lineares Mass): eine Rahmenecke = Pfeilspitze auf einem Kreisbogen
   if cname ~= "" and not cname:find("Linear") then
     local tb = math.max(2 * tol, 0.04 * math.max(w, h))
     local best, bd = nil, tb
@@ -1176,7 +1248,7 @@ function Draw:offsetDim(x1, y1, x2, y2, label, off)
   self:alignedDim(x1 + nx * off, y1 + ny * off, x2 + nx * off, y2 + ny * off, label)
 end
 -- Winkelmass: Scheitel vx,vy, Schenkel Richtung a und b (alles in PDF-Punkten)
-function Draw:angleDim(vx, vy, ax, ay, bx, by, label)
+function Draw:angleDim(vx, vy, ax, ay, bx, by, label, fixed)
   local la = math.sqrt((ax - vx) ^ 2 + (ay - vy) ^ 2)
   local lb = math.sqrt((bx - vx) ^ 2 + (by - vy) ^ 2)
   if la < 1e-6 or lb < 1e-6 then return end
@@ -1188,6 +1260,7 @@ function Draw:angleDim(vx, vy, ax, ay, bx, by, label)
   -- Bogenradius: knapp die Haelfte des kuerzeren Schenkels, 4 bis 10 mm
   -- (grosse Boegen ueberdecken sich bei kleinen Teilen sonst gegenseitig)
   local r = math.max(4 * MM, math.min(10 * MM, 0.45 * math.min(la, lb)))
+  if fixed then a1, sweep, r = fixed.a1, fixed.sweep, fixed.r end   -- Lage wie in Vectric (auch > 180 Grad)
   -- Schenkel bis zum Bogen verlaengern, falls sie kuerzer sind
   local function leg(len, ang)
     if len < r then
@@ -1788,8 +1861,9 @@ function main(script_path)
       minx = math.min(minx, l[1], l[3]); miny = math.min(miny, l[2], l[4])
       maxx = math.max(maxx, l[1], l[3]); maxy = math.max(maxy, l[2], l[4])
       if l.angle then
-        minx = math.min(minx, l.vx); miny = math.min(miny, l.vy)
-        maxx = math.max(maxx, l.vx); maxy = math.max(maxy, l.vy)
+        local rr = l.vr or 0                                      -- Vectric-Winkel: ganzer Massbogen
+        minx = math.min(minx, l.vx - rr); miny = math.min(miny, l.vy - rr)
+        maxx = math.max(maxx, l.vx + rr); maxy = math.max(maxy, l.vy + rr)
       end
     end
 
@@ -1821,7 +1895,7 @@ function main(script_path)
     local page_w, page_h, scale, offx, offy
     -- Radius-Beschriftungen ("R ..." mit Pfeil von aussen) brauchen rechts/oben Platz
     local has_r = dim_radius or dim_circle
-    for _, l in ipairs(dim_lines) do if l.radius then has_r = true end end
+    for _, l in ipairs(dim_lines) do if l.radius or l.vsw then has_r = true end end
     local rres = has_r and (TextWidth("R 000.000\"", fs) + 8 * MM) or 0
     local function Layout(res)
       if scale_mode == 2 then
@@ -2228,6 +2302,9 @@ function main(script_path)
           local a0 = atan2(l.py - l.cy, l.px - l.cx)
           d:radius(tx(l.cx), ty(l.cy), tx(l.px), ty(l.py), lab, a0 - math.pi, 2 * math.pi)
         end
+      elseif l.angle and l.vsw then          -- Vectric-Winkelmass: Bogen wie in VCarve
+        d:angleDim(tx(l.vx), ty(l.vy), tx(l[1]), ty(l[2]), tx(l[3]), ty(l[4]),
+                   fmtAng(l.vsw * 180 / math.pi), { a1 = l.vsa, sweep = l.vsw, r = l.vr * scale })
       elseif l.angle then
         local a1 = atan2(l[2] - l.vy, l[1] - l.vx)
         local sw = atan2(l[4] - l.vy, l[3] - l.vx) - a1
