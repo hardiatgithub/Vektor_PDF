@@ -2147,6 +2147,28 @@ function main(script_path)
       local gap, over = EXT_GAP, 1.5 * MM
       if len <= gap + 0.1 then return end
       local ux, uy = (ax - bx) / len, (ay - by) / len
+      -- Laeuft die Hilfslinie tangential vom Bauteil weg (z. B. Kreis-Scheitel), klebt sie anfangs
+      -- an der Kontur -> erst dort beginnen, wo sie sich sichtbar von der Kontur geloest hat
+      local clear = (line_mm * MM) / 2 + 0.5 * MM
+      local start, sstep = 0, 0.25 * MM
+      local seg = Segments()
+      while start < len - gap do
+        local mx, my = px + ux * start / scale, py + uy * start / scale
+        local dmin = math.huge
+        for _, sg in ipairs(seg) do
+          local dx, dy = sg[3] - sg[1], sg[4] - sg[2]
+          local l2 = dx * dx + dy * dy
+          local t = 0
+          if l2 > 0 then t = math.max(0, math.min(1, ((mx - sg[1]) * dx + (my - sg[2]) * dy) / l2)) end
+          local qx, qy = sg[1] + t * dx - mx, sg[2] + t * dy - my
+          local dd = qx * qx + qy * qy
+          if dd < dmin then dmin = dd end
+        end
+        if math.sqrt(dmin) * scale >= clear then break end
+        start = start + sstep
+      end
+      gap = math.max(gap, start + 0.5 * MM)
+      if len <= gap + 0.1 then return end
       d:line(bx + ux * gap, by + uy * gap, ax + ux * over, ay + uy * over)
     end
     for _, l in ipairs(dim_lines) do

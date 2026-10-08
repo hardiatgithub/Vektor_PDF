@@ -65,6 +65,8 @@ Neueste Version steht oben.
 - Vectric-Bemaßung: **Radiusmaße** werden übernommen (als „R …“ mit Pfeil von außen); Maße an Kreisen
   zeigen jetzt exakt den Vectric-Wert (Maßzahl aus den Vectric-Hilfslinien, vorher z. B. 11.999 statt 12.000).
 - Radius-Beschriftungen bekommen rechts/oben eigenen Platz auf der Seite (wurden am Rand abgeschnitten).
+- Hilfslinien, die tangential vom Bauteil weglaufen (z. B. am Kreis-Scheitel), beginnen erst, wo sie sich von der
+  Kontur gelöst haben – keine „Kerbe“ mehr in der Kreislinie.
 - **Längenmaße mit Abstand**: Einzel- und Gesamtmaße, die sich überschneiden würden, werden automatisch
   in eigene Reihen nach außen versetzt – keine Maßlinie und keine Zahl liegt mehr auf einer anderen.
   Der Platz am Blattrand wird dafür automatisch vergrößert.
