@@ -67,6 +67,12 @@ Neueste Version steht oben.
 - Radius-Beschriftungen bekommen rechts/oben eigenen Platz auf der Seite (wurden am Rand abgeschnitten).
 - Hilfslinien, die tangential vom Bauteil weglaufen (z. B. am Kreis-Scheitel), beginnen erst, wo sie sich von der
   Kontur gelöst haben – keine „Kerbe“ mehr in der Kreislinie.
+- Vectric-Radiusmaße, die in VCarve **innen** liegen (Linie vom Mittelpunkt zum Bogen), werden im PDF ebenso
+  innen gezeichnet; außen liegende (Pfeil mit Fahne) bleiben außen.
+- Neuer Schalter **„Radius innen (Linie vom Mittelpunkt, wie Vectric)“** in der Autobemaßung: Kreise und Bögen
+  bekommen ihr R-Maß dann von innen statt mit Pfeil von außen.
+- Vectric schräge Maße: Messpunkte werden zuerst an Ecken/Bogen-Enden gesucht (vorher konnte z. B. bei einem
+  Sehnenmaß über einen Bogen ein Punkt mitten auf dem Bogen gewählt werden: 64.9 statt 70.7).
 - **Längenmaße mit Abstand**: Einzel- und Gesamtmaße, die sich überschneiden würden, werden automatisch
   in eigene Reihen nach außen versetzt – keine Maßlinie und keine Zahl liegt mehr auf einer anderen.
   Der Platz am Blattrand wird dafür automatisch vergrößert.

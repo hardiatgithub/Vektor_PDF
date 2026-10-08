@@ -289,7 +289,7 @@ end
 
 -- Kontur -> { cmds = {...}, arcs = {...}, closed, all_arcs, minx, miny, maxx, maxy }
 local function ContourToPath(contour, seg_len)
-  local p = { cmds = {}, arcs = {}, segs = {}, all_arcs = true, closed = contour.IsClosed,
+  local p = { cmds = {}, arcs = {}, segs = {}, knots = {}, all_arcs = true, closed = contour.IsClosed,
               minx = math.huge, miny = math.huge, maxx = -math.huge, maxy = -math.huge }
   local cmds = p.cmds
   local first = true
@@ -300,8 +300,10 @@ local function ContourToPath(contour, seg_len)
     local p1, p2 = span.StartPoint2D, span.EndPoint2D
     if first then
       cmds[#cmds + 1] = { "m", p1.X, p1.Y }
+      p.knots[#p.knots + 1] = { p1.X, p1.Y }
       first = false
     end
+    p.knots[#p.knots + 1] = { p2.X, p2.Y }          -- Knoten (Anfang/Ende jedes Stuecks)
     if span.IsArcType then
       local arc = CastSpanToArcSpan(span)
       for _, q in ipairs(ArcPoints(p1.X, p1.Y, p2.X, p2.Y, arc.Bulge, seg_len)) do
@@ -590,10 +592,11 @@ local custom_dims = true            -- Schalter "Individuelle Bemassung"
 local snap_verts = nil              -- Fangpunkte aller Vektoren (einmal je Lauf)
 local snap_segs = nil               -- gerade Stuecke aller Vektoren (fuer schmale Masse)
 local snap_arcs = nil               -- Kreisboegen aller Vektoren (fuer Radius-Masse)
+local snap_knots = nil              -- Knoten aller Vektoren (Ecken, Bogen-Enden) fuer schraege Masse
 
 local function SnapVerts(job, in_mm)
   if snap_verts then return snap_verts end
-  snap_verts, snap_segs, snap_arcs = {}, {}, {}
+  snap_verts, snap_segs, snap_arcs, snap_knots = {}, {}, {}, {}
   pcall(function()
     local lm = job.LayerManager
     local lpos = lm:GetHeadPosition()
@@ -624,6 +627,7 @@ local function SnapVerts(job, in_mm)
                 elseif cmd[1] == "c" then snap_segs[#snap_segs + 1] = { lx, ly, cmd[6], cmd[7] }; lx, ly = cmd[6], cmd[7]
                 elseif cmd[1] == "h" and sx then snap_segs[#snap_segs + 1] = { lx, ly, sx, sy } end
               end
+              for _, k in ipairs(p.knots) do snap_knots[#snap_knots + 1] = k end
               -- Kreisboegen: genaue Extrempunkte (0/90/180/270 Grad) als Fangpunkte
               for _, a in ipairs(p.arcs) do
                 snap_arcs[#snap_arcs + 1] = a
@@ -681,7 +685,13 @@ local function VectricDimLine(job, obj, in_mm, known_k)
       local a = best.a
       local ang = atan2(best.y - a.cy, best.x - a.cx)
       local px, py = a.cx + a.r * math.cos(ang), a.cy + a.r * math.sin(ang)
-      return { a.cx, a.cy, px, py, radius = true, cx = a.cx, cy = a.cy, r = a.r, px = px, py = py }
+      -- innenliegend (Linie vom Mittelpunkt): Rahmen umfasst den Mittelpunkt
+      local inside = a.cx > x0 - tb and a.cx < x1 + tb and a.cy > y0 - tb and a.cy < y1 + tb
+      -- Radius und Durchmesser sind in VCarve dieselbe Klasse (vcCadArcDimensioningObject) und
+      -- geben keine Eigenschaften heraus -> immer als Radius ("R ...") ausgeben
+      local diam = false
+      return { a.cx, a.cy, px, py, radius = true, inside = inside, diam = diam,
+               cx = a.cx, cy = a.cy, r = a.r, px = px, py = py }
     end
     return nil
   end
@@ -814,8 +824,9 @@ local function VectricDimLine(job, obj, in_mm, known_k)
     do
       local tb = math.max(2 * tol, 0.03 * math.max(w, h))
       local ex = 0.3 * math.max(w, h)
+      local function Fit(pts)
       local cand = {}
-      for _, q in ipairs(verts) do
+      for _, q in ipairs(pts) do
         if q[1] > x0 - ex and q[1] < x1 + ex and q[2] > y0 - ex and q[2] < y1 + ex and #cand < 150 then
           cand[#cand + 1] = q
         end
@@ -847,6 +858,11 @@ local function VectricDimLine(job, obj, in_mm, known_k)
           end
         end
       end
+      return best
+      end
+      -- zuerst nur Knoten (Ecken, Bogen-Enden): Vectric misst meist dazwischen;
+      -- sonst wuerde ein Punkt mitten auf einem Bogen faelschlich passen
+      local best = Fit(snap_knots or {}) or Fit(verts)
       if best then return best end
     end
     -- 3) kurze Hilfslinien (Fangpunkt weit weg vom Rahmen): naechsten Punkt genau auf der
@@ -1237,6 +1253,27 @@ function Draw:diameter(cx, cy, r, label)
     self:text(x2 + e + 1.5 * MM, cy - self.fs * 0.35, label, nil, false, "left")
   end
 end
+-- Radius von innen (wie Vectric): Linie vom Mittelpunkt zum Bogen, Pfeil am Bogen,
+-- Zahl entlang der Linie
+function Draw:radiusInside(cx, cy, px, py, label)
+  local dx, dy = px - cx, py - cy
+  local len = math.sqrt(dx * dx + dy * dy)
+  if len < 1e-6 then return end
+  local ux, uy = dx / len, dy / len
+  self:line(cx, cy, px, py)
+  self:arrowhead(px, py, ux, uy)
+  local ang = atan2(uy, ux)
+  if ang > math.pi / 2 + 1e-6 or ang <= -math.pi / 2 + 1e-6 then ang = ang + math.pi end
+  local tnx, tny = -math.sin(ang), math.cos(ang)
+  local mx, my
+  for _, t in ipairs({ 0.5, 0.35, 0.65, 0.25, 0.75 }) do
+    local x, y = cx + dx * t + tnx * 1 * MM, cy + dy * t + tny * 1 * MM
+    if mx == nil then mx, my = x, y end
+    if self:boxFree(self:angleBox(x, y, label, ang)) then mx, my = x, y; break end
+  end
+  self:textAngle(mx, my, label, ang)
+end
+
 function Draw:radius(cx, cy, px, py, label, sa, sw)
   local function place(qx, qy, l)
     local dx, dy = qx - cx, qy - cy
@@ -1542,6 +1579,7 @@ function main(script_path)
   AddNum("MinDim", 25)
   dialog:AddCheckBox("DimRadius", reg:GetBool("DimRadius", false))
   dialog:AddCheckBox("DimRadiusOnce", reg:GetBool("DimRadiusOnce", true))
+  dialog:AddCheckBox("DimRadiusIn", reg:GetBool("DimRadiusIn", false))
   dialog:AddCheckBox("DimAngle", reg:GetBool("DimAngle", false))
   dialog:AddRadioGroup("DimColor", reg:GetInt("DimColor", 1))
   dialog:AddCheckBox("ShowScale", reg:GetBool("ShowScale", true))
@@ -1605,6 +1643,7 @@ function main(script_path)
   end
   local dim_radius  = dialog:GetCheckBox("DimRadius")
   local radius_once = dialog:GetCheckBox("DimRadiusOnce")
+  local radius_in   = dialog:GetCheckBox("DimRadiusIn")
   local dim_angle   = dialog:GetCheckBox("DimAngle")
   local dim_auto    = dialog:GetCheckBox("DimAuto")
   custom_dims       = dialog:GetCheckBox("DimCustom")
@@ -1632,6 +1671,7 @@ function main(script_path)
   reg:SetDouble("MinDim", min_dim_mm)
   reg:SetBool("DimRadius", dim_radius)
   reg:SetBool("DimRadiusOnce", radius_once)
+  reg:SetBool("DimRadiusIn", radius_in)
   reg:SetBool("DimAngle", dim_angle)
   reg:SetBool("DimAuto", dim_auto)
   reg:SetBool("DimCustom", custom_dims)
@@ -1984,7 +2024,11 @@ function main(script_path)
     -- Kreise: Radius mit Pfeil von aussen (schraeg rechts oben, weicht bei Bedarf entlang des Kreises aus)
     for _, c in ipairs(cdims) do
       local a0 = math.pi / 4
-      d:radius(c[1], c[2], c[1] + c[3] * math.cos(a0), c[2] + c[3] * math.sin(a0), c[4], a0 - math.pi, 2 * math.pi)
+      if radius_in then
+        d:radiusInside(c[1], c[2], c[1] + c[3] * math.cos(a0), c[2] + c[3] * math.sin(a0), c[4])
+      else
+        d:radius(c[1], c[2], c[1] + c[3] * math.cos(a0), c[2] + c[3] * math.sin(a0), c[4], a0 - math.pi, 2 * math.pi)
+      end
     end
     for _, l in ipairs(ldims) do d:offsetDim(l[1], l[2], l[3], l[4], l[5], near) end
 
@@ -2009,7 +2053,11 @@ function main(script_path)
             if not seen and a.r > tol then
               done[#done + 1] = a.r
               all_done[#all_done + 1] = a
-              d:radius(tx(a.cx), ty(a.cy), tx(a.px), ty(a.py), "R " .. fmt(a.r), a.sa, a.sw)
+              if radius_in then
+                d:radiusInside(tx(a.cx), ty(a.cy), tx(a.px), ty(a.py), "R " .. fmt(a.r))
+              else
+                d:radius(tx(a.cx), ty(a.cy), tx(a.px), ty(a.py), "R " .. fmt(a.r), a.sa, a.sw)
+              end
             end
           end
         end
@@ -2173,8 +2221,13 @@ function main(script_path)
     end
     for _, l in ipairs(dim_lines) do
       if l.radius then
-        local a0 = atan2(l.py - l.cy, l.px - l.cx)
-        d:radius(tx(l.cx), ty(l.cy), tx(l.px), ty(l.py), "R " .. fmt(l.r), a0 - math.pi, 2 * math.pi)
+        local lab = l.diam and ("\195\152 " .. fmt(2 * l.r)) or ("R " .. fmt(l.r))
+        if l.inside then
+          d:radiusInside(tx(l.cx), ty(l.cy), tx(l.px), ty(l.py), lab)
+        else
+          local a0 = atan2(l.py - l.cy, l.px - l.cx)
+          d:radius(tx(l.cx), ty(l.cy), tx(l.px), ty(l.py), lab, a0 - math.pi, 2 * math.pi)
+        end
       elseif l.angle then
         local a1 = atan2(l[2] - l.vy, l[1] - l.vx)
         local sw = atan2(l[4] - l.vy, l[3] - l.vx) - a1
