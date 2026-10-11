@@ -47,6 +47,59 @@
   .vhint { font-size: 1em; color: #333; margin: 0 0 0.4em 0; }
   .layers label { white-space: nowrap; margin-right: 0.9em; }
   .layers.dim { color: #999; }
+
+  /* ---------- Farbschema ----------
+     Nur Farben, Rahmen, Rundungen und Schatten -- Schriftgroessen und Abstaende
+     bleiben wie oben, damit die Zoom-Logik unveraendert funktioniert.
+     Alles auch in aelteren Browser-Kernen (Dialog von VCarve) darstellbar;
+     wo ein Verlauf nicht geht, gilt die einfache Hintergrundfarbe davor. */
+  body { background: #e9eef4; color: #22303c; }
+  h2 { background: #1f5f99;
+       background: linear-gradient(to right, #1f5f99, #2b84c6);
+       color: #fff; padding: 4px 8px; border-radius: 6px; margin-bottom: 8px;
+       box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+  h2 .lang { color: #e6f0fa; }
+  input.ver { color: #cfe3f5; }
+  fieldset { background: #fff; border: 1px solid #c7d3df; border-radius: 6px;
+             box-shadow: 0 1px 2px rgba(0,0,0,0.08); padding: 6px 8px; }
+  legend { background: #1f5f99; color: #fff; padding: 1px 9px; border-radius: 10px;
+           font-size: 0.95em; }
+  /* jeder Bereich mit eigener Farbe */
+  fieldset.s-lines   legend { background: #2b84c6; }
+  fieldset.s-vectors legend { background: #2e9b6e; }
+  fieldset.s-dims    legend { background: #2a9a9f; }
+  fieldset.s-labels  legend { background: #7a5bb5; }
+  fieldset.s-page    legend { background: #4a6a85; }
+  fieldset.s-file    legend { background: #d0782a; }
+  fieldset.s-file    { border-left: 4px solid #d0782a; }
+  input.LuaButton { border: 1px solid #9fb0c0; border-radius: 4px; background: #f4f7fa; cursor: pointer; padding: 0 0.6em; }
+  input.LuaButton:hover { background: #e7eef5; }
+  .pathrow { margin-top: 0.25em; white-space: nowrap; }
+  input.path { width: 88%; }
+  fieldset.s-lines   { border-left: 4px solid #2b84c6; }
+  fieldset.s-vectors { border-left: 4px solid #2e9b6e; }
+  fieldset.s-dims    { border-left: 4px solid #2a9a9f; }
+  fieldset.s-labels  { border-left: 4px solid #7a5bb5; }
+  fieldset.s-page    { border-left: 4px solid #4a6a85; }
+  .hint { color: #6b7c8c; }
+  .vhint { color: #1f3b3c; background: #e9f6f6; border: 1px solid #b6dfe0;
+           border-radius: 4px; padding: 1px 5px; }
+  input[type=text] { border: 1px solid #b7c4d1; border-radius: 3px; background: #fbfdff; }
+  input[type=text]:focus { border-color: #2b84c6; background: #fff; outline: none; }
+  h2 input.ver, h2 input.ver:focus { border: 0; background: transparent; color: #cfe3f5; }
+  input.off { background: #e4e4e4; color: #999; border-color: #ccc; }
+  .dbtn { background: #eef8f8; border: 1px solid #9fd3d5; border-radius: 12px; padding: 0.15em 0.6em; }
+  .dbtn:hover { background: #ddf1f2; border-color: #2a9a9f; }
+  .dmore { color: #2a9a9f; font-weight: bold; }
+  .automenu { background: #f4fbfb; border: 1px solid #b6dfe0; border-radius: 4px; }
+  .automenu.dim { color: #a9a9a9; }
+  .layers label:hover, fieldset label:hover { color: #1f5f99; }
+  .FormButton { border-radius: 4px; cursor: pointer;
+                border: 1px solid #9fb0c0; background: #f4f7fa; color: #22303c; }
+  .FormButton:hover { background: #e7eef5; }
+  #ButtonOK { background: #2b84c6; border-color: #1f5f99; color: #fff; font-weight: bold; }
+  #ButtonOK:hover { background: #1f6fae; }
+  .zoombox { color: #4a6a85; }
 </style>
 </head>
 <body>
@@ -59,7 +112,7 @@
   <input class="ver" type="text" id="Version" readonly tabindex="-1">
 </h2>
 
-<fieldset>
+<fieldset class="s-lines">
   <legend><span class="t" data-en="Lines">Linien</span></legend>
   <table>
     <tr><td><span class="t" data-en="Line width:">Linienstärke:</span></td>
@@ -70,7 +123,7 @@
   </table>
 </fieldset>
 
-<fieldset>
+<fieldset class="s-vectors">
   <legend><span class="t" data-en="Which vectors">Welche Vektoren</span></legend>
   <label><input type="radio" name="Source" value="1"> <span class="t" data-en="Selected only">Nur ausgewählte</span></label>&nbsp;&nbsp;
   <label><input type="radio" name="Source" value="2"> <span class="t" data-en="All visible layers">Alle sichtbaren Ebenen</span></label>&nbsp;&nbsp;
@@ -82,12 +135,13 @@
   <label><input type="radio" name="SheetMode" value="2"> <span class="t" data-en="All sheets (one PDF page each)">Alle Seiten (je eine PDF-Seite)</span></label>
 </fieldset>
 
-<fieldset>
+<fieldset class="s-dims">
   <legend><span class="t" data-en="Dimensions">Bemaßung</span></legend>
-  <div class="vhint"><span class="t" data-en="Vectric dimensions are largely taken over and redrawn – alternatively use auto dimensions.">Vectric-Bemaßungen werden weitgehend übernommen und neu gezeichnet – alternativ Autobemaßung verwenden.</span></div>
+  <div class="vhint"><span class="t" data-en="Vectric dimensions are largely taken over and redrawn – auto dimensions instead or in addition.">Vectric-Bemaßungen werden weitgehend übernommen und neu gezeichnet – Autobemaßung alternativ oder ergänzend.</span></div>
   <div class="dimbtns">
-    <span class="dbtn"><label><input type="checkbox" id="DimAuto" onclick="syncAll()"> <span class="t" data-en="Auto dimensions">Autobemaßung</span></label>
+    <span class="dbtn" title="Weitere Einstellungen: auf ► klicken" data-title-en="More settings: click ►"><label><input type="checkbox" id="DimAuto" onclick="syncAll()"> <span class="t" data-en="Auto dimensions">Autobemaßung</span></label>
       <a href="#" class="dmore" onclick="toggleAutoMenu(); return false;"><span id="AutoArrow">&#9658;</span></a></span>
+    <span class="dbtn" title="Empfohlen, wenn Autobemaßung verwendet wird" data-title-en="Recommended when using auto dimensions"><label><input type="checkbox" id="VDimOff"> <span class="t" data-en="Vectric dimensions off">Vectric-Bemaßung aus</span></label></span>
   </div>
   <div id="AutoMenu" class="automenu" style="display:none">
     <label><input type="checkbox" id="DimOverall"> <span class="t" data-en="Overall dimensions (width × height)">Gesamtmaße (Breite × Höhe)</span></label>
@@ -123,7 +177,7 @@
   </table>
 </fieldset>
 
-<fieldset>
+<fieldset class="s-labels">
   <legend><span class="t" data-en="Labels">Beschriftung</span></legend>
   <table>
     <tr><td><span class="t" data-en="Title:">Titel:</span></td><td><input class="txt" type="text" id="Title"></td></tr>
@@ -132,7 +186,7 @@
   <label><input type="checkbox" id="ShowScale"> <span class="t" data-en="Show scale, unit and date at the bottom">Maßstab, Einheit und Datum unten anzeigen</span></label>
 </fieldset>
 
-<fieldset>
+<fieldset class="s-page">
   <legend><span class="t" data-en="Page">Seite</span></legend>
   <label><input type="radio" name="ScaleMode" value="1"> <span class="t" data-en="Fit to A4">Auf A4 einpassen</span></label>&nbsp;&nbsp;
   <label><input type="radio" name="ScaleMode" value="2"> <span class="t" data-en="Scale 1:1">Maßstab 1:1</span></label>
@@ -144,6 +198,16 @@
     <tr><td><span class="t" data-en="Margin:">Rand:</span></td><td><input class="num" type="text" id="Margin"> mm</td></tr>
   </table>
   <label><input type="checkbox" id="DrawBorder"> <span class="t" data-en="Print material outline in grey">Materialumriss grau mitdrucken</span></label>
+</fieldset>
+
+<fieldset class="s-file">
+  <legend><span class="t" data-en="File">Datei</span></legend>
+  <span class="t" data-en="Save as:">Speichern unter:</span>
+  <span class="hint t" data-en="&nbsp;(empty = ask when exporting)">&nbsp;(leer = beim Export nachfragen)</span>
+  <div class="pathrow">
+    <input class="path" type="text" id="PdfPath" onblur="showPathEnd()" title="Vorhandene Datei wird überschrieben" data-title-en="An existing file will be overwritten">
+    <input class="LuaButton" id="BrowsePdf" type="button" value="…" title="Ordner und Namen wählen" data-title-en="Choose folder and name">
+  </div>
 </fieldset>
 
 <input type="text" id="ScrW" style="display:none"><input type="text" id="ScrH" style="display:none">
@@ -188,6 +252,13 @@ function syncLang() {
     if ((" " + el.className + " ").indexOf(" t ") < 0) continue;
     if (el.getAttribute("data-de") == null) el.setAttribute("data-de", el.innerHTML);
     el.innerHTML = (lang == "2") ? el.getAttribute("data-en") : el.getAttribute("data-de");
+  }
+  // Tooltips (title) mit Uebersetzung in data-title-en
+  var tips = document.querySelectorAll ? document.querySelectorAll("[data-title-en]") : [];
+  for (var j = 0; j < tips.length; j++) {
+    var tp = tips[j];
+    if (tp.getAttribute("data-title-de") == null) tp.setAttribute("data-title-de", tp.title);
+    tp.title = (lang == "2") ? tp.getAttribute("data-title-en") : tp.getAttribute("data-title-de");
   }
   var cancel = document.getElementById("ButtonCancel");
   if (cancel) {
@@ -369,12 +440,19 @@ function syncAutoMenu() {
   if (cb && m) m.className = cb.checked ? "automenu" : "automenu dim";
 }
 
+// Langer Pfad: ans Ende rollen, damit der Dateiname sichtbar ist
+function showPathEnd() {
+  var e = document.getElementById("PdfPath");
+  if (!e) return;
+  try { e.scrollLeft = e.scrollWidth; } catch (x) {}
+}
 function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); syncAutoMenu(); applyZoom(false); }
 
 window.onload = function () {
   reportScreen();
   syncAll();
   applyZoom(true);
+  setTimeout(showPathEnd, 50);
   setTimeout(function () { applyZoom(true); }, 400);
 };
 window.onresize = function () { applyZoom(true); };

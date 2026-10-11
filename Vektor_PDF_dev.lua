@@ -38,6 +38,7 @@ local skipped = 0
 local vdims = {}                    -- gesammelte Vectric-Bemassungen { obj, sheet }
 local vdim_ok, vdim_unsure = 0, 0
 local use_vdims = false             -- Vectric-Masse nur aus eingeschalteten Layern (wie in VCarve angezeigt)
+local vdims_off = false             -- Schalter "Vectric-Bemassung aus": keine Vectric-Masse ins PDF
 local layer_colors = {}                          -- Layer-Id -> Farbe (fuer "Nur ausgewaehlte")
 local layer_color_ok, layer_color_fail = 0, 0   -- Layerfarben gelesen / nicht lesbar
 local layer_color_diag = nil
@@ -1060,6 +1061,7 @@ local function CollectContours(job, selected_only, dim_layer, layer_filter)
   end
   -- Vectric-Bemassungen der gedruckten Layer bzw. der Auswahl als Masslinien
   -- 1. Durchgang: eindeutige Masse; dabei den Pfeil-Ueberstand k schmaler Masse lernen
+  if vdims_off then vdims = {} end   -- Vectric-Bemassungen bewusst weglassen
   local open, known_k = {}, nil
   for _, vd in ipairs(vdims) do
     local l, k = VectricDimLine(job, vd.obj, job.InMM, nil)
@@ -1588,6 +1590,66 @@ end
 -- ------------------------------------------------------------------
 -- Hauptprogramm
 -- ------------------------------------------------------------------
+-- ------------------------------------------------------------------
+-- Speicherort des PDFs
+-- ------------------------------------------------------------------
+-- Ordner und Dateiname eines Pfads (Windows oder /)
+local function SplitPath(p)
+  p = tostring(p or "")
+  local dir, name = p:match("^(.*[\\/])([^\\/]*)$")
+  if not dir then return "", p end
+  return dir, name
+end
+-- Name der VCarve-Datei ohne Endung (oder nil)
+local function JobBaseName(job)
+  for _, key in ipairs({ "Name", "FullPath", "Path", "PathName", "FileName" }) do
+    local ok, v = pcall(function() return job[key] end)
+    if ok and type(v) == "string" and v ~= "" then
+      local _, n = SplitPath(v)
+      n = n:gsub("%.[^%.]*$", "")
+      if n ~= "" then return n end
+    end
+  end
+  return nil
+end
+-- Ordner der VCarve-Datei (oder nil)
+local function JobDir(job)
+  for _, key in ipairs({ "FullPath", "Path", "PathName" }) do
+    local ok, v = pcall(function() return job[key] end)
+    if ok and type(v) == "string" and v:find("[\\/]") then
+      local d = SplitPath(v)
+      if d ~= "" then return d end
+    end
+  end
+  return nil
+end
+local function WithPdfExt(p)
+  p = p:gsub("^%s+", ""):gsub("%s+$", "")
+  if p ~= "" and not p:lower():find("%.pdf$") then p = p .. ".pdf" end
+  return p
+end
+
+-- Knopf "..." neben "Speichern unter": Windows-Dialog oeffnen, Ergebnis ins Feld schreiben
+-- (VCarve ruft OnLuaButton_<Id> auf, wenn ein Knopf der Klasse "LuaButton" gedrueckt wird)
+function OnLuaButton_BrowsePdf(dialog)
+  local en = false
+  pcall(function() en = dialog:GetRadioIndex("Lang") == 2 end)
+  local function T(de, e) return en and e or de end
+  local cur = ""
+  pcall(function() cur = dialog:GetTextField("PdfPath") or "" end)
+  local _, name = SplitPath(cur)
+  if name == "" then name = T("Zeichnung.pdf", "Drawing.pdf") end
+  local fd = FileDialog()
+  if fd:FileSave("pdf", name, T("PDF Dateien", "PDF files") .. " (*.pdf)|*.pdf|") then
+    local ok = pcall(function() dialog:UpdateTextField("PdfPath", fd.PathName) end)
+    if not ok then
+      DisplayMessageBox(T("Bitte den Pfad ins Feld \"Speichern unter\" eintragen:\n",
+                          "Please enter the path in the \"Save as\" field:\n") .. fd.PathName)
+    end
+  end
+  return true
+end
+
 function main(script_path)
   local reg = Registry("PDF_Export")
   local lang = reg:GetInt("Lang", 1)                 -- 1 = Deutsch, 2 = English
@@ -1670,6 +1732,7 @@ function main(script_path)
   dialog:AddRadioGroup("SheetMode", reg:GetInt("SheetMode", 1))
   dialog:AddCheckBox("DrawBorder", reg:GetBool("DrawBorder", false))
   dialog:AddCheckBox("DimAuto", reg:GetBool("DimAuto", true))
+  dialog:AddCheckBox("VDimOff", reg:GetBool("VDimOff", false))
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
   dialog:AddCheckBox("DimOverallIn", reg:GetBool("DimOverallIn", false))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
@@ -1686,6 +1749,21 @@ function main(script_path)
   dialog:AddCheckBox("ShowScale", reg:GetBool("ShowScale", true))
   dialog:AddTextField("Title", reg:GetString("Title", ""))
   dialog:AddTextField("Note", "")
+  -- Speichern unter: zuletzt benutzter Ordner + Name der VCarve-Datei
+  -- (nur der Ordner wird gemerkt, damit eine neue Zeichnung nicht das alte PDF ueberschreibt)
+  do
+    local dir = reg:GetString("PdfDir", "")
+    if dir == "" then dir = JobDir(job) or "" end
+    if dir == "" then                       -- noch nichts bekannt: Dokumente-Ordner vorschlagen
+      local ok, home = pcall(function() return os.getenv("USERPROFILE") end)
+      if ok and type(home) == "string" and home ~= "" then dir = home .. "\\Documents\\" end
+    end
+    local base = JobBaseName(job)
+    local _, last_name = SplitPath(reg:GetString("PdfLast", ""))
+    local name = base and (base .. ".pdf") or last_name
+    if name == "" then name = T("Zeichnung.pdf", "Drawing.pdf") end
+    dialog:AddTextField("PdfPath", (dir ~= "" and name ~= "") and (dir .. name) or "")
+  end
 
   dialog:AddTextField("ScrW", "")
   dialog:AddTextField("ScrH", "")
@@ -1749,6 +1827,7 @@ function main(script_path)
   local radius_in   = dialog:GetCheckBox("DimRadiusIn")
   local dim_angle   = dialog:GetCheckBox("DimAngle")
   local dim_auto    = dialog:GetCheckBox("DimAuto")
+  vdims_off         = dialog:GetCheckBox("VDimOff")          -- Vectric-Bemassungen nicht ins PDF
   local dim_layer   = ""                   -- individuelle Bemassung ausgebaut (Branch individ_bem)
   local hide_dims   = false
   local dim_color   = dialog:GetRadioIndex("DimColor")   -- 1 schwarz, 2 blau, 3 rot, 4 gruen, 5 grau
@@ -1756,6 +1835,7 @@ function main(script_path)
   local show_scale  = dialog:GetCheckBox("ShowScale")
   local title       = dialog:GetTextField("Title") or ""
   local note        = dialog:GetTextField("Note") or ""
+  local pdf_path    = WithPdfExt(dialog:GetTextField("PdfPath") or "")   -- leer = Windows-Dialog
 
   reg:SetDouble("LineWidth", line_mm)
   reg:SetDouble("DimLineWidth", dim_line_mm)
@@ -1778,6 +1858,7 @@ function main(script_path)
   reg:SetBool("DimRadiusIn", radius_in)
   reg:SetBool("DimAngle", dim_angle)
   reg:SetBool("DimAuto", dim_auto)
+  reg:SetBool("VDimOff", vdims_off)
 
   if not dim_auto then              -- Autobemassung aus: alle automatischen Masse aus (Haekchen bleiben gemerkt)
     dim_overall, dim_each, dim_poly, dim_radius, dim_angle, dim_circle = false, false, false, false, false, false
@@ -2642,11 +2723,19 @@ function main(script_path)
   end
 
   -- Speichern
-  local fd = FileDialog()
-  if not fd:FileSave("pdf", T("Zeichnung.pdf", "Drawing.pdf"), T("PDF Dateien", "PDF files") .. " (*.pdf)|*.pdf|") then
-    return false
+  local fd = { PathName = pdf_path }
+  if pdf_path == "" then                    -- kein Pfad eingetragen: wie bisher fragen
+    fd = FileDialog()
+    if not fd:FileSave("pdf", T("Zeichnung.pdf", "Drawing.pdf"), T("PDF Dateien", "PDF files") .. " (*.pdf)|*.pdf|") then
+      return false
+    end
   end
   local ok, err = WritePdf(fd.PathName, pages)
+  if ok then
+    local d = SplitPath(fd.PathName)
+    if d ~= "" then reg:SetString("PdfDir", d) end
+    reg:SetString("PdfLast", fd.PathName)
+  end
   if not ok then
     local hint = ""
     if tostring(err):lower():find("permission") then

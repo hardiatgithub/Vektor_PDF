@@ -12,6 +12,17 @@ Neueste Version steht oben.
   Vectric-Bemaßungen und Autobemaßung funktionieren unverändert.
 
 ### Neu (nach beta.4)
+- **Speichern unter** (neuer Bereich „Datei“ unten im Dialog): Pfad des PDFs direkt eintragen oder mit „…“ wählen.
+  Das Feld hat eine eigene, breite Zeile; bei langen Pfaden ist das Ende (Dateiname) sichtbar.
+  Vorgeschlagen werden der zuletzt benutzte Ordner (anfangs „Dokumente“) und der Name der VCarve-Datei (nur der Ordner wird gemerkt,
+  damit eine neue Zeichnung nicht das alte PDF überschreibt). Eine vorhandene Datei wird überschrieben;
+  leeres Feld = wie bisher beim Export nachfragen.
+- **Farbiger Dialog**: Kopfzeile in Blau, jeder Bereich (Linien, Vektoren, Bemaßung, Beschriftung, Seite) mit eigener
+  Farbe, weiße Karten auf hellem Grund, OK-Knopf hervorgehoben. Schriftgrößen und Abstände unverändert – der
+  automatische Zoom passt wie bisher.
+- **Schalter „Vectric-Bemaßung aus“** neben „Autobemaßung“: lässt die Vectric-Bemaßungen im PDF weg, auch wenn ihr
+  Layer in VCarve eingeschaltet ist. Tooltip: „Empfohlen, wenn Autobemaßung verwendet wird“.
+- Tooltip bei „Autobemaßung“: „Weitere Einstellungen: auf ► klicken“ (Hinweis auf das aufklappbare Menü).
 - **Autobemaßung innen oder außen**: Bei „Gesamtmaße“ und „Maße jedes Vektors“ gibt es je ein Häkchen „innen“.
   Innen läuft die Maßlinie durchs Teil (ohne Maßhilfslinien), an der breitesten bzw. höchsten Stelle und mit dem
   dort gemessenen Wert. Bekommt ein Teil beide Innenmaße, liegt das waagrechte oben (Zahl rechts) und das senkrechte
