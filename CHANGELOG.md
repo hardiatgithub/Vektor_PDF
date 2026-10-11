@@ -12,6 +12,9 @@ Neueste Version steht oben.
   Vectric-Bemaßungen und Autobemaßung funktionieren unverändert.
 
 ### Neu (nach beta.4)
+- **Vectric-Maße überlappen nicht mehr**: Liegen Vectric-Bemaßungen so dicht, dass sie sich mit der PDF-Schrift
+  überdecken würden (z. B. Gesamtmaß auf gleicher Höhe wie zwei Einzelmaße – bei sehr kleiner Maßschrift in VCarve),
+  bleibt das kürzere Maß liegen und das längere rückt eine Spur nach außen. Hilfslinien laufen mit.
 - **Speichern unter** (neuer Bereich „Datei“ unten im Dialog): Pfad des PDFs direkt eintragen oder mit „…“ wählen.
   Das Feld hat eine eigene, breite Zeile; bei langen Pfaden ist das Ende (Dateiname) sichtbar.
   Vorgeschlagen werden der zuletzt benutzte Ordner (anfangs „Dokumente“) und der Name der VCarve-Datei (nur der Ordner wird gemerkt,

@@ -1940,6 +1940,64 @@ function main(script_path)
       maxx = math.max(maxx, p.maxx); maxy = math.max(maxy, p.maxy)
     end
     local vminx, vminy, vmaxx, vmaxy = minx, miny, maxx, maxy   -- nur Vektoren
+
+    -- Vectric-Masse, die sich gegenseitig ueberlagern (z. B. Gesamtmass auf derselben Hoehe wie
+    -- zwei Einzelmasse), auseinanderruecken: das kuerzere bleibt, das laengere rueckt eine Spur
+    -- nach aussen (weg vom Bauteil). Die Masshilfslinien folgen automatisch (Messpunkte p1/p2).
+    do
+      local fs0 = font_mm * MM
+      local s0
+      if scale_mode == 2 then s0 = unit_pt
+      else
+        local w0, h0 = math.max(vmaxx - vminx, 1e-9), math.max(vmaxy - vminy, 1e-9)
+        local pw, ph = 841.89, 595.28
+        if not ((orient == 3) or (orient ~= 2 and w0 > h0)) then pw, ph = ph, pw end
+        s0 = math.min((pw - 2 * margin_mm * MM - 20 * MM) / w0, (ph - 2 * margin_mm * MM - 30 * MM) / h0)
+      end
+      if s0 and s0 > 0 then
+        local lane_m = (fs0 + 2.5 * MM) / s0                  -- Spurabstand in Zeichnungseinheiten
+        local cx, cy = (vminx + vmaxx) / 2, (vminy + vmaxy) / 2
+        local function sep(horiz)
+          local list = {}
+          for _, l in ipairs(dim_lines) do
+            if not l.angle and not l.radius then
+              local dx, dy = math.abs(l[3] - l[1]), math.abs(l[4] - l[2])
+              local is_h = dy < 1e-6 * math.max(1, dx)
+              local is_v = dx < 1e-6 * math.max(1, dy)
+              if (horiz and is_h and dx > 0) or ((not horiz) and is_v and dy > 0) then
+                local a = horiz and math.min(l[1], l[3]) or math.min(l[2], l[4])
+                local b = horiz and math.max(l[1], l[3]) or math.max(l[2], l[4])
+                local half = TextWidth(fmt(b - a), fs0) / s0 / 2 + 1 * MM / s0
+                local mid = (a + b) / 2
+                local pos = horiz and l[2] or l[1]
+                -- Richtung nach aussen: weg von den Messpunkten bzw. von der Mitte der Zeichnung
+                local ref = horiz and cy or cx
+                if l.p1 and l.p2 then ref = horiz and (l.p1[2] + l.p2[2]) / 2 or (l.p1[1] + l.p2[1]) / 2 end
+                local out = (pos >= ref) and 1 or -1
+                list[#list + 1] = { l = l, len = b - a, lo = math.min(a, mid - half), hi = math.max(b, mid + half),
+                                    pos = pos, out = out }
+              end
+            end
+          end
+          table.sort(list, function(p, q) return p.len < q.len end)   -- kurze zuerst, die bleiben
+          local done = {}
+          for _, it in ipairs(list) do
+            for _ = 1, 10 do
+              local hit = false
+              for _, q in ipairs(done) do
+                if it.lo < q.hi and it.hi > q.lo and math.abs(it.pos - q.pos) < lane_m * 0.95 then hit = true; break end
+              end
+              if not hit then break end
+              it.pos = it.pos + it.out * lane_m
+            end
+            if horiz then it.l[2], it.l[4] = it.pos, it.pos else it.l[1], it.l[3] = it.pos, it.pos end
+            done[#done + 1] = it
+          end
+        end
+        sep(true); sep(false)
+      end
+    end
+
     for _, l in ipairs(dim_lines) do                              -- Platz fuer manuelle Masse
       minx = math.min(minx, l[1], l[3]); miny = math.min(miny, l[2], l[4])
       maxx = math.max(maxx, l[1], l[3]); maxy = math.max(maxy, l[2], l[4])
