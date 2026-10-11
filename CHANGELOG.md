@@ -12,9 +12,28 @@ Neueste Version steht oben.
   Vectric-Bemaßungen und Autobemaßung funktionieren unverändert.
 
 ### Neu (nach beta.4)
+- **Bemaßung mit Maßstab skalieren** (Bereich „Bemaßung“): Schrifthöhe in der Zeichnung (Standard 10 mm) × Maßstab,
+  begrenzt auf die eingestellte Schriftgröße (oben) und eine Mindestgröße (Standard 2 mm). Beispiel 1:5 → 2 mm,
+  1:2 → 3,5 mm. Pfeile und Abstände der Maßlinien wachsen bzw. schrumpfen mit; Titel und Fußzeile bleiben gleich.
+- **Maßstab frei wählbar** (Bereich „Seite“, dritte Option „Maßstab:“): z. B. 1:5, 1:7,5 oder 2:1 eintippen oder aus der
+  Normliste (▾) wählen. Die Zeichnung kommt im eingestellten Maßstab mittig auf A4 (Ausrichtung wie gewählt; bei
+  „Automatisch“ die, in die sie passt). Passt sie nicht, entsteht kein PDF, sondern ein Hinweis mit dem kleinsten
+  passenden Normmaßstab.
+- **Schmale Maße lesbar** (z. B. Maßketten auf stark verkleinerten Zeichnungen): Passen die Pfeile noch zwischen die
+  Hilfslinien, nur die Zahl nicht, bleiben die Pfeile innen und die Zahl steht über (bzw. unter) dem Maß. Erst wenn
+  auch die Pfeile nicht passen, kommen sie von außen; die Zahl steht dann daneben – oder, wenn dort schon etwas steht,
+  über dem Maß. Zahlen benachbarter Maße weichen einander aus (bis zu zwei Reihen weiter außen).
+- **Vectric-Maße besser erkannt**: Kurze Maße und Maßketten (z. B. 18,33 | 20 | 36,67 bei kleiner Maßschrift in VCarve)
+  werden jetzt übernommen, auch wenn die Messpunkte etwas weiter vom Maß entfernt liegen. Schmale Maße mit Pfeilen
+  von außen (z. B. Nutbreite 4) werden auch ohne ein zweites schmales Maß in der Zeichnung erkannt.
+  Maßketten bleiben beim Auseinanderrücken in einer Reihe.
+- **Diagnose**: Bei jedem Export schreibt das Gadget `vdim_diag.txt` (von Git ignoriert) mit Rahmen und Ergebnis
+  jeder Vectric-Bemaßung – hilft beim Nachvollziehen, warum ein Maß fehlt.
 - **Vectric-Maße überlappen nicht mehr**: Liegen Vectric-Bemaßungen so dicht, dass sie sich mit der PDF-Schrift
   überdecken würden (z. B. Gesamtmaß auf gleicher Höhe wie zwei Einzelmaße – bei sehr kleiner Maßschrift in VCarve),
   bleibt das kürzere Maß liegen und das längere rückt eine Spur nach außen. Hilfslinien laufen mit.
+  Gerückt wird nur, wenn ein Maß das andere ganz umschließt und beide vom selben Bauteil auf dieselbe Seite
+  zeigen – Maße verschiedener Teile (z. B. zwei Maßketten zwischen zwei Teilen) bleiben, wo VCarve sie hat.
 - **Speichern unter** (neuer Bereich „Datei“ unten im Dialog): Pfad des PDFs direkt eintragen oder mit „…“ wählen.
   Das Feld hat eine eigene, breite Zeile; bei langen Pfaden ist das Ende (Dateiname) sichtbar.
   Vorgeschlagen werden der zuletzt benutzte Ordner (anfangs „Dokumente“) und der Name der VCarve-Datei (nur der Ordner wird gemerkt,
