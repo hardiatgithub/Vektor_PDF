@@ -5,18 +5,24 @@ Neueste Version steht oben.
 
 ## [Unveröffentlicht]
 
+### Entfernt
+- **Individuelle Bemaßung** wieder ausgebaut (Schalter, Layerfeld, Knopf „Layer anlegen“ und Anleitung im Dialog;
+  Hilfslinien auf dem Layer „pdf_dim“ werden nicht mehr als Maße gedruckt, der Layer wird nicht mehr angelegt).
+  Der Stand mit dieser Funktion ist im Branch **`individ_bem`** gesichert und kann später wieder übernommen werden.
+  Vectric-Bemaßungen und Autobemaßung funktionieren unverändert.
+
 ### Neu (nach beta.4)
 - **Vectric-Bemaßungen im PDF**: Waagrechte und senkrechte Bemaßungen aus VCarve werden automatisch ins PDF
   übernommen – mit Maßlinie, Pfeilen, Zahl und Hilfslinien. Gesteuert wird das über die Layer in VCarve:
   ist der Layer mit den Bemaßungen eingeschaltet, erscheinen sie im PDF, sonst nicht. An der Zeichnung
   wird nichts verändert. Schräge Bemaßungen kann VCarve nicht an Gadgets weitergeben – sie fehlen im PDF
   (Hinweis in der Abschlussmeldung).
-- **Individuelle Bemaßung** (Schalter mit frei wählbarem Layer, Standard „pdf_dim“; fehlt der Layer, wird er – in Hellgrün, später änderbar – angelegt, auch per Knopf „Layer anlegen“; Anleitung im Rollmenü ►): Eine Linie von Pfeil zu Pfeil wird als Maß gedruckt, eine Linie
+- ~~**Individuelle Bemaßung**~~ *(wieder entfernt, siehe oben – Branch `individ_bem`)* (Schalter mit frei wählbarem Layer, Standard „pdf_dim“; fehlt der Layer, wird er – in Hellgrün, später änderbar – angelegt, auch per Knopf „Layer anlegen“; Anleitung im Rollmenü ►): Eine Linie von Pfeil zu Pfeil wird als Maß gedruckt, eine Linie
   mit 3 Punkten (V-Form) als Winkel – ebenfalls nur, wenn der Layer in VCarve eingeschaltet ist.
   Die Einstellungen „Maß-Layer“ und „ausblenden“ im Dialog entfallen dadurch.
 - **Übersichtlicher Bemaßungs-Bereich**: Schalter „Autobemaßung“; die einzelnen Punkte der Autobemaßung (Gesamtmaße, jeder Vektor, Polylinien, Radien, Winkel,
   Einzelmaße ab) stehen in einem aufklappbaren Menü (▸).
-- **Maßhilfslinien**: Maße von Vectric-Bemaßungen und vom Layer „pdf_dim“ bekommen automatisch Hilfslinien
+- **Maßhilfslinien**: Maße von Vectric-Bemaßungen bekommen automatisch Hilfslinien
   senkrecht bis kurz vor das Bauteil – wie in einer technischen Zeichnung. Alle Maßhilfslinien halten
   2 mm Abstand zum Bauteil (vorher 1 mm).
 - **Layer auswählen**: Unter „Welche Vektoren“ gibt es „Gewählte Layer“ mit einer Liste aller Layer zum Ankreuzen

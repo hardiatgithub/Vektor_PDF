@@ -479,7 +479,6 @@ local function SetLayerColour(layer, r, g, b)
   end
   return false
 end
-local CUSTOM_LAYER_RGB = { 0.45, 0.85, 0.35 }   -- hellgruen
 
 local function AddObject(obj, contours, in_group, sheet, color)
   if sheet == nil then sheet = ObjSheet(obj) end
@@ -587,8 +586,10 @@ end
 -- waagrechte bzw. senkrechte Masslinie abgeleitet, deren Enden auf das Bauteil fangen.
 -- Schraege oder unsichere Bemassungen werden ausgelassen.
 -- ------------------------------------------------------------------
-local PDF_DIM_LAYER = "pdf_dim"     -- Layer fuer selbst gezeichnete Masslinien (im Dialog einstellbar)
-local custom_dims = true            -- Schalter "Individuelle Bemassung"
+-- Individuelle Bemassung (Hilfslinien auf eigenem Layer) ist ausgebaut,
+-- gesichert im Branch "individ_bem". Ohne Layernamen werden keine Hilfslinien gelesen.
+local PDF_DIM_LAYER = ""
+local custom_dims = false
 local snap_verts = nil              -- Fangpunkte aller Vektoren (einmal je Lauf)
 local snap_segs = nil               -- gerade Stuecke aller Vektoren (fuer schmale Masse)
 local snap_arcs = nil               -- Kreisboegen aller Vektoren (fuer Radius-Masse)
@@ -603,7 +604,7 @@ local function SnapVerts(job, in_mm)
     while lpos ~= nil do
       local layer
       layer, lpos = lm:GetNext(lpos)
-      if NormName(LayerName(layer)) ~= NormName(PDF_DIM_LAYER) then
+      if PDF_DIM_LAYER == "" or NormName(LayerName(layer)) ~= NormName(PDF_DIM_LAYER) then
         local stack = {}
         local pos = layer:GetHeadPosition()
         while pos ~= nil do
@@ -1506,59 +1507,6 @@ end
 -- ------------------------------------------------------------------
 -- Hauptprogramm
 -- ------------------------------------------------------------------
--- ------------------------------------------------------------------
--- Knopf im Dialog: Layer fuer die individuelle Bemassung anlegen
--- (VCarve ruft OnLuaButton_<Id> auf, wenn ein Knopf der Klasse "LuaButton" gedrueckt wird)
--- ------------------------------------------------------------------
-function OnLuaButton_CreateDimLayer(dialog)
-  local en = false
-  pcall(function() en = dialog:GetRadioIndex("Lang") == 2 end)
-  local function T(de, e) return en and e or de end
-  local name = ""
-  pcall(function() name = dialog:GetTextField("DimCustomLayer") or "" end)
-  name = name:gsub("^%s+", ""):gsub("%s+$", "")
-  if name == "" then
-    DisplayMessageBox(T("Bitte zuerst einen Layernamen eintragen.", "Please enter a layer name first."))
-    return true
-  end
-  local job = VectricJob()
-  if not job.Exists then return true end
-  local exists = false
-  pcall(function()
-    local lm = job.LayerManager
-    local lpos = lm:GetHeadPosition()
-    while lpos ~= nil do
-      local layer
-      layer, lpos = lm:GetNext(lpos)
-      if NormName(LayerName(layer)) == NormName(name) then exists = true end
-    end
-  end)
-  local layer = nil
-  local ok = pcall(function() layer = job.LayerManager:GetLayerWithName(name) end)
-  if not ok or layer == nil then
-    DisplayMessageBox(T("Der Layer konnte nicht angelegt werden.", "The layer could not be created."))
-    return true
-  end
-  if not exists then SetLayerColour(layer, CUSTOM_LAYER_RGB[1], CUSTOM_LAYER_RGB[2], CUSTOM_LAYER_RGB[3]) end
-  pcall(function() layer.Visible = true end)
-  pcall(function() job.LayerManager:SetActiveLayer(layer) end)   -- gleich zum Zeichnen auswaehlen
-  pcall(function() job:Refresh2DView() end)
-  if exists then
-    DisplayMessageBox(T("Der Layer \"" .. name .. "\" ist bereits vorhanden.",
-                        "The layer \"" .. name .. "\" already exists.") ..
-      T("\n\nDialog schliessen, den Layer in VCarve als aktiven Layer waehlen und die Masslinien zeichnen.",
-        "\n\nClose the dialog, make the layer active in VCarve and draw the dimension lines."))
-  else
-    DisplayMessageBox(T("Der Layer \"" .. name .. "\" wurde angelegt und kann jetzt bearbeitet werden.",
-                        "The layer \"" .. name .. "\" has been created and can now be edited.") ..
-      T("\n\nDialog schliessen (Abbrechen), den Layer in VCarve als aktiven Layer waehlen und Linien" ..
-        " von Pfeil zu Pfeil zeichnen (3 Punkte = Winkel). Danach das Gadget erneut starten.",
-        "\n\nClose the dialog (Cancel), make the layer active in VCarve and draw lines" ..
-        " from arrow to arrow (3 points = angle). Then run the gadget again."))
-  end
-  return true
-end
-
 function main(script_path)
   local reg = Registry("PDF_Export")
   local lang = reg:GetInt("Lang", 1)                 -- 1 = Deutsch, 2 = English
@@ -1632,9 +1580,7 @@ function main(script_path)
       local ln = n:lower()
       if ln:find("werkzeugweg") or ln:find("toolpath") then printable = false end
       if n ~= "" and printable then
-        if NormName(n) ~= NormName(reg:GetString("DimCustomLayer", "pdf_dim")) then
-          layer_items[#layer_items + 1] = (layer.Visible and "1:" or "0:") .. n:gsub("|", "/")
-        end
+        layer_items[#layer_items + 1] = (layer.Visible and "1:" or "0:") .. n:gsub("|", "/")
       end
     end
   end)
@@ -1643,8 +1589,6 @@ function main(script_path)
   dialog:AddRadioGroup("SheetMode", reg:GetInt("SheetMode", 1))
   dialog:AddCheckBox("DrawBorder", reg:GetBool("DrawBorder", false))
   dialog:AddCheckBox("DimAuto", reg:GetBool("DimAuto", true))
-  dialog:AddCheckBox("DimCustom", reg:GetBool("DimCustom", true))
-  dialog:AddTextField("DimCustomLayer", reg:GetString("DimCustomLayer", "pdf_dim"))
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
   dialog:AddCheckBox("DimCircle", reg:GetBool("DimCircle", true))
@@ -1719,9 +1663,7 @@ function main(script_path)
   local radius_in   = dialog:GetCheckBox("DimRadiusIn")
   local dim_angle   = dialog:GetCheckBox("DimAngle")
   local dim_auto    = dialog:GetCheckBox("DimAuto")
-  custom_dims       = dialog:GetCheckBox("DimCustom")
-  PDF_DIM_LAYER     = (dialog:GetTextField("DimCustomLayer") or ""):gsub("^%s+", ""):gsub("%s+$", "")
-  local dim_layer   = PDF_DIM_LAYER        -- Layer der individuellen Bemassung
+  local dim_layer   = ""                   -- individuelle Bemassung ausgebaut (Branch individ_bem)
   local hide_dims   = false
   local dim_color   = dialog:GetRadioIndex("DimColor")   -- 1 schwarz, 2 blau, 3 rot, 4 gruen, 5 grau
   local show_scale  = dialog:GetCheckBox("ShowScale")
@@ -1747,37 +1689,7 @@ function main(script_path)
   reg:SetBool("DimRadiusIn", radius_in)
   reg:SetBool("DimAngle", dim_angle)
   reg:SetBool("DimAuto", dim_auto)
-  reg:SetBool("DimCustom", custom_dims)
-  reg:SetString("DimCustomLayer", PDF_DIM_LAYER)
 
-  -- Individuelle Bemassung: Layer muss benannt sein; fehlt er in der Datei, wird er angelegt
-  local custom_created = false
-  if custom_dims then
-    if PDF_DIM_LAYER == "" then
-      DisplayMessageBox(T("Bitte bei \"Individuelle Bemassung\" einen Layernamen eintragen.",
-                          "Please enter a layer name for \"Custom dimensions\"."))
-      return false
-    end
-    local exists = false
-    pcall(function()
-      local lm = job.LayerManager
-      local lpos = lm:GetHeadPosition()
-      while lpos ~= nil do
-        local layer
-        layer, lpos = lm:GetNext(lpos)
-        if NormName(LayerName(layer)) == NormName(PDF_DIM_LAYER) then exists = true end
-      end
-    end)
-    if not exists then
-      local nl = nil
-      local okc = pcall(function() nl = job.LayerManager:GetLayerWithName(PDF_DIM_LAYER) end)
-      if okc then
-        custom_created = true
-        if nl then SetLayerColour(nl, CUSTOM_LAYER_RGB[1], CUSTOM_LAYER_RGB[2], CUSTOM_LAYER_RGB[3]) end
-        pcall(function() job:Refresh2DView() end)
-      end
-    end
-  end
   if not dim_auto then              -- Autobemassung aus: alle automatischen Masse aus (Haekchen bleiben gemerkt)
     dim_overall, dim_each, dim_poly, dim_radius, dim_angle, dim_circle = false, false, false, false, false, false
   end
@@ -2492,16 +2404,10 @@ function main(script_path)
   if dim_each then
     msg = msg .. "\n(" .. n_group .. T(" davon in Gruppen - ohne Einzelmasse)", " of them in groups - no individual dimensions)")
   end
-  if custom_created then
-    msg = msg .. "\n\n" .. T("Layer \"", "Layer \"") .. PDF_DIM_LAYER ..
-          T("\" fuer die individuelle Bemassung wurde angelegt.", "\" for custom dimensions was created.")
-  end
   if vdim_unsure > 0 then
     msg = msg .. "\n\n" .. vdim_unsure ..
-          T(" Vectric-Bemassung(en) nicht sicher erkannt (z. B. schraeg) - fehlen im PDF." ..
-            "\nDafuer eine Linie von Pfeil zu Pfeil auf den Layer \"" .. PDF_DIM_LAYER .. "\" zeichnen.",
-            " Vectric dimension(s) not recognised reliably (e.g. aligned) - missing in the PDF." ..
-            "\nDraw a line from arrow to arrow on layer \"" .. PDF_DIM_LAYER .. "\" instead.")
+          T(" Vectric-Bemassung(en) nicht sicher erkannt (z. B. schraeg) - fehlen im PDF.",
+            " Vectric dimension(s) not recognised reliably (e.g. aligned) - missing in the PDF.")
   end
   if vec_color == 6 and layer_color_ok == 0 then
     msg = msg .. T("\n\nHinweis: Layerfarben konnten nicht gelesen werden - Linien schwarz gedruckt.",
