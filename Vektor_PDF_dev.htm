@@ -84,14 +84,16 @@
 
 <fieldset>
   <legend><span class="t" data-en="Dimensions">Bemaßung</span></legend>
-  <div class="vhint"><span class="t" data-en="Horizontal and vertical Vectric dimensions are taken over (if shown in VCarve) – add any others with auto dimensions.">Waagrechte und senkrechte Vectric-Bemaßungen werden übernommen (wenn in VCarve angezeigt) – alle anderen mit der Autobemaßung ergänzen.</span></div>
+  <div class="vhint"><span class="t" data-en="Vectric dimensions are largely taken over and redrawn – alternatively use auto dimensions.">Vectric-Bemaßungen werden weitgehend übernommen und neu gezeichnet – alternativ Autobemaßung verwenden.</span></div>
   <div class="dimbtns">
     <span class="dbtn"><label><input type="checkbox" id="DimAuto" onclick="syncAll()"> <span class="t" data-en="Auto dimensions">Autobemaßung</span></label>
       <a href="#" class="dmore" onclick="toggleAutoMenu(); return false;"><span id="AutoArrow">&#9658;</span></a></span>
   </div>
   <div id="AutoMenu" class="automenu" style="display:none">
-    <label><input type="checkbox" id="DimOverall"> <span class="t" data-en="Overall dimensions (width × height)">Gesamtmaße (Breite × Höhe)</span></label><br>
-    <label><input type="checkbox" id="DimEach"> <span class="t" data-en="Dimensions of each vector (single lines as length)">Maße jedes Vektors (Einzellinien als Länge)</span></label><br>
+    <label><input type="checkbox" id="DimOverall"> <span class="t" data-en="Overall dimensions (width × height)">Gesamtmaße (Breite × Höhe)</span></label>
+      <label style="margin-left:10px"><input type="checkbox" id="DimOverallIn"> <span class="t" data-en="inside">innen</span></label><br>
+    <label><input type="checkbox" id="DimEach"> <span class="t" data-en="Dimensions of each vector (single lines as length)">Maße jedes Vektors (Einzellinien als Länge)</span></label>
+      <label style="margin-left:10px"><input type="checkbox" id="DimEachIn"> <span class="t" data-en="inside">innen</span></label><br>
     <label><input type="checkbox" id="DimCircle"> <span class="t" data-en="Circles (radius R)">Kreise (Radius R)</span></label><br>
     <label><input type="checkbox" id="DimPoly"> <span class="t" data-en="Open polylines: each straight segment">Offene Polylinien: jedes gerade Stück</span></label><br>
     <label><input type="checkbox" id="DimRadius"> <span class="t" data-en="Radii on arcs (R …)">Radien an Bögen (R …)</span></label><br>
@@ -116,6 +118,8 @@
       <span class="hint t" data-en="&nbsp;length of arrow heads (default 2.5)">&nbsp;Länge der Pfeilspitzen (Standard 2,5)</span></td></tr>
     <tr><td><span class="t" data-en="Font size:">Schriftgröße:</span></td>
       <td><input class="num" type="text" id="FontSize"> mm</td></tr>
+    <tr><td></td>
+      <td><label><input type="checkbox" id="DimTextInline"> <span class="t" data-en="Value inside the dimension line (like Vectric)">Maßzahl in der Maßlinie (wie Vectric)</span></label></td></tr>
   </table>
 </fieldset>
 

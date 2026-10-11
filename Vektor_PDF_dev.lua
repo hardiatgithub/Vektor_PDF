@@ -1093,7 +1093,8 @@ local Draw = {}
 Draw.__index = Draw
 
 function Draw.new(font_size, line_w)
-  return setmetatable({ s = {}, fs = font_size, lw = line_w, arrow = 2.5 * MM, boxes = {} }, Draw)
+  return setmetatable({ s = {}, fs = font_size, lw = line_w, arrow = 2.5 * MM, boxes = {},
+                        inline = true }, Draw)   -- inline: Masszahl in der Masslinie (wie Vectric)
 end
 -- Flaeche einer Beschriftung (x0, y0, x1, y1), damit sich Zahlen nicht ueberdecken
 local function TextBox(x, y, str, size, rotated, align)
@@ -1114,6 +1115,21 @@ end
 function Draw:add(x) self.s[#self.s + 1] = x end
 function Draw:line(x1, y1, x2, y2)
   self:add(f(x1) .. " " .. f(y1) .. " m " .. f(x2) .. " " .. f(y2) .. " l S")
+end
+-- Linie von (x1,y1) nach (x2,y2) mit einer Luecke der halben Laenge 'half' um den Punkt
+-- im Abstand t (PDF-Punkte) von (x1,y1) - dort sitzt die Masszahl
+function Draw:lineGap(x1, y1, x2, y2, t, half)
+  local dx, dy = x2 - x1, y2 - y1
+  local len = math.sqrt(dx * dx + dy * dy)
+  if len < 1e-6 then return end
+  local ux, uy = dx / len, dy / len
+  local a, b = t - half, t + half
+  if a > 0 then self:line(x1, y1, x1 + ux * a, y1 + uy * a) end
+  if b < len then self:line(x1 + ux * b, y1 + uy * b, x2, y2) end
+end
+-- halbe Luecke fuer eine Masszahl (Zahl plus etwas Luft)
+function Draw:gapHalf(label)
+  return TextWidth(label, self.fs) / 2 + 0.8 * MM
 end
 function Draw:arrowhead(x, y, dx, dy)       -- Spitze bei x,y; zeigt Richtung dx,dy
   local a, w = self.arrow, self.arrow * 0.3
@@ -1141,10 +1157,12 @@ end
 function Draw:narrow(len, label)
   return len < 2 * self.arrow + TextWidth(label, self.fs) + 2 * MM
 end
-function Draw:hdim(xa, xb, yref, yline, label)
+function Draw:hdim(xa, xb, yref, yline, label, inner)
   local gap, over = EXT_GAP, 1.5 * MM
-  self:line(xa, yref - gap, xa, yline - over)
-  self:line(xb, yref - gap, xb, yline - over)
+  if not inner then                                -- Innenmass: keine Masshilfslinien
+    self:line(xa, yref - gap, xa, yline - over)
+    self:line(xb, yref - gap, xb, yline - over)
+  end
   if self:narrow(xb - xa, label) then
     local e = self.arrow + 2 * MM
     local tx = xa - e - 1 * MM                       -- Zahl links daneben
@@ -1154,10 +1172,30 @@ function Draw:hdim(xa, xb, yref, yline, label)
     self:text(tx - 0.5 * MM, yline - self.fs * 0.35, label, nil, false, "right")
     return
   end
-  self:line(xa, yline, xb, yline)
   self:arrowhead(xa, yline, -1, 0)
   self:arrowhead(xb, yline, 1, 0)
-  self:text((xa + xb) / 2, yline + 1 * MM, label)
+  local len, half = xb - xa, self:gapHalf(label)
+  -- Lage der Zahl entlang der Linie: mittig; bei Innenmassen notfalls seitlich ausweichen
+  local t = len / 2
+  if inner then
+    -- bei zwei Innenmassen im selben Teil: waagrechte Zahl rechts, senkrechte unten
+    local cand = (inner == "pair") and { 0.68, 0.72, 0.64, 0.76, 0.6, 0.8, 0.56, 0.5, 0.84, 0.4 }
+                                   or { 0.5, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7, 0.25, 0.75, 0.2, 0.8 }
+    for _, f in ipairs(cand) do
+      local d = f * len
+      if d - half >= self.arrow and len - d - half >= self.arrow then
+        local yy = self.inline and (yline - self.fs * 0.35) or (yline + 1 * MM)
+        if self:boxFree(TextBox(xa + d, yy, label, self.fs)) then t = d; break end
+      end
+    end
+  end
+  if self.inline then                               -- Zahl in der Masslinie
+    self:lineGap(xa, yline, xb, yline, t, half)
+    self:text(xa + t, yline - self.fs * 0.35, label)
+    return
+  end
+  self:line(xa, yline, xb, yline)
+  self:text(xa + t, yline + 1 * MM, label)
 end
 -- Text entlang einer Richtung (Winkel in Bogenmass), mittig bei x,y
 -- Flaeche eines gedrehten Textes (achsparalleler Rahmen um die gedrehte Schrift)
@@ -1198,7 +1236,7 @@ function Draw:alignedDim(x1, y1, x2, y2, label)
   self:line(x1 - nx * tick, y1 - ny * tick, x1 + nx * tick, y1 + ny * tick)
   self:line(x2 - nx * tick, y2 - ny * tick, x2 + nx * tick, y2 + ny * tick)
   if not self:narrow(len, label) then
-    self:line(x1, y1, x2, y2)
+    if not self.inline then self:line(x1, y1, x2, y2) end   -- inline: Linie mit Luecke unten
     self:arrowhead(x1, y1, -ux, -uy)
     self:arrowhead(x2, y2, ux, uy)
   else                                          -- zu kurz: Pfeile von aussen
@@ -1227,6 +1265,24 @@ function Draw:alignedDim(x1, y1, x2, y2, label)
     ang = ang + math.pi
   end
   local tnx, tny = -math.sin(ang), math.cos(ang)   -- "oberhalb" des Textes
+  if self.inline then
+    -- Zahl in der Masslinie; liegt dort schon eine andere Zahl, entlang der Linie ausweichen
+    -- (die Luecke muss auf beiden Seiten noch Platz fuer den Pfeil lassen)
+    local half = self:gapHalf(label)
+    local bt, bx, by
+    for _, t in ipairs({ 0.5, 0.35, 0.65, 0.25, 0.75, 0.15, 0.85 }) do
+      local d = t * len
+      if d - half >= self.arrow and len - d - half >= self.arrow then
+        local cx, cy = x1 + ux * d - tnx * self.fs * 0.35, y1 + uy * d - tny * self.fs * 0.35
+        if bt == nil then bt, bx, by = d, cx, cy end
+        if self:boxFree(self:angleBox(cx, cy, label, ang)) then bt, bx, by = d, cx, cy; break end
+      end
+    end
+    if bt == nil then bt = len / 2; bx, by = x1 + ux * bt - tnx * self.fs * 0.35, y1 + uy * bt - tny * self.fs * 0.35 end
+    self:lineGap(x1, y1, x2, y2, bt, half)
+    self:textAngle(bx, by, label, ang)
+    return
+  end
   -- Zahl moeglichst mittig; liegt dort schon eine andere Zahl, entlang der Linie ausweichen
   local mx, my
   for _, t in ipairs({ 0.5, 0.35, 0.65, 0.25, 0.75, 0.15, 0.85 }) do
@@ -1312,9 +1368,14 @@ end
 function Draw:diameter(cx, cy, r, label)
   local x1, x2 = cx - r, cx + r
   if not self:narrow(2 * r, label) then
-    self:line(x1, cy, x2, cy)
     self:arrowhead(x1, cy, -1, 0)
     self:arrowhead(x2, cy, 1, 0)
+    if self.inline then                             -- Zahl mittig in der Masslinie
+      self:lineGap(x1, cy, x2, cy, r, self:gapHalf(label))
+      self:text(cx, cy - self.fs * 0.35, label)
+      return
+    end
+    self:line(x1, cy, x2, cy)
     -- Zahl ueber der Linie; ist dort belegt, darunter
     local ty = cy + 1 * MM
     if not self:boxFree(TextBox(cx, ty, label, self.fs)) then ty = cy - 1 * MM - self.fs * 0.8 end
@@ -1386,10 +1447,12 @@ function Draw:radius(cx, cy, px, py, label, sa, sw)
   self:text(best.tx, best.ty, label, nil, false, best.align)
 end
 -- senkrechtes Mass: von ya bis yb, Bezugskante xref, Masslinie bei xline (links)
-function Draw:vdim(ya, yb, xref, xline, label)
+function Draw:vdim(ya, yb, xref, xline, label, inner)
   local gap, over = EXT_GAP, 1.5 * MM
-  self:line(xref - gap, ya, xline - over, ya)
-  self:line(xref - gap, yb, xline - over, yb)
+  if not inner then                                -- Innenmass: keine Masshilfslinien
+    self:line(xref - gap, ya, xline - over, ya)
+    self:line(xref - gap, yb, xline - over, yb)
+  end
   if self:narrow(yb - ya, label) then
     local e = self.arrow + 2 * MM
     local ty = ya - e - 1 * MM                       -- Zahl unten daneben
@@ -1399,10 +1462,28 @@ function Draw:vdim(ya, yb, xref, xline, label)
     self:text(xline + self.fs * 0.35, ty - 0.5 * MM, label, nil, true, "right")
     return
   end
-  self:line(xline, ya, xline, yb)
   self:arrowhead(xline, ya, 0, -1)
   self:arrowhead(xline, yb, 0, 1)
-  self:text(xline - 1 * MM, (ya + yb) / 2, label, nil, true)
+  local len, half = yb - ya, self:gapHalf(label)
+  local t = len / 2
+  if inner then
+    local cand = (inner == "pair") and { 0.32, 0.28, 0.36, 0.24, 0.4, 0.2, 0.44, 0.5, 0.16, 0.6 }
+                                   or { 0.5, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7, 0.25, 0.75, 0.2, 0.8 }
+    for _, f in ipairs(cand) do
+      local d = f * len
+      if d - half >= self.arrow and len - d - half >= self.arrow then
+        local xx = self.inline and (xline + self.fs * 0.35) or (xline - 1 * MM)
+        if self:boxFree(TextBox(xx, ya + d, label, self.fs, true)) then t = d; break end
+      end
+    end
+  end
+  if self.inline then                               -- Zahl in der Masslinie (gedreht)
+    self:lineGap(xline, ya, xline, yb, t, half)
+    self:text(xline + self.fs * 0.35, ya + t, label, nil, true)
+    return
+  end
+  self:line(xline, ya, xline, yb)
+  self:text(xline - 1 * MM, ya + t, label, nil, true)
 end
 
 -- ------------------------------------------------------------------
@@ -1590,7 +1671,9 @@ function main(script_path)
   dialog:AddCheckBox("DrawBorder", reg:GetBool("DrawBorder", false))
   dialog:AddCheckBox("DimAuto", reg:GetBool("DimAuto", true))
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
+  dialog:AddCheckBox("DimOverallIn", reg:GetBool("DimOverallIn", false))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
+  dialog:AddCheckBox("DimEachIn", reg:GetBool("DimEachIn", false))
   dialog:AddCheckBox("DimCircle", reg:GetBool("DimCircle", true))
   dialog:AddCheckBox("DimPoly", reg:GetBool("DimPoly", false))
   AddNum("MinDim", 25)
@@ -1599,6 +1682,7 @@ function main(script_path)
   dialog:AddCheckBox("DimRadiusIn", reg:GetBool("DimRadiusIn", false))
   dialog:AddCheckBox("DimAngle", reg:GetBool("DimAngle", false))
   dialog:AddRadioGroup("DimColor", reg:GetInt("DimColor", 1))
+  dialog:AddCheckBox("DimTextInline", reg:GetBool("DimTextInline", true))
   dialog:AddCheckBox("ShowScale", reg:GetBool("ShowScale", true))
   dialog:AddTextField("Title", reg:GetString("Title", ""))
   dialog:AddTextField("Note", "")
@@ -1649,7 +1733,9 @@ function main(script_path)
   local sheet_mode  = dialog:GetRadioIndex("SheetMode")     -- 1 = aktuelle Seite, 2 = alle Seiten
   local draw_border = dialog:GetCheckBox("DrawBorder")
   local dim_overall = dialog:GetCheckBox("DimOverall")
+  local overall_in  = dialog:GetCheckBox("DimOverallIn")   -- Gesamtmasse innen (durchs Teil)
   local dim_each    = dialog:GetCheckBox("DimEach")
+  local each_in     = dialog:GetCheckBox("DimEachIn")      -- Masse jedes Vektors innen
   local dim_circle  = dialog:GetCheckBox("DimCircle")
   local dim_poly    = dialog:GetCheckBox("DimPoly")
   local min_dim_mm  = GetNum("MinDim")
@@ -1666,6 +1752,7 @@ function main(script_path)
   local dim_layer   = ""                   -- individuelle Bemassung ausgebaut (Branch individ_bem)
   local hide_dims   = false
   local dim_color   = dialog:GetRadioIndex("DimColor")   -- 1 schwarz, 2 blau, 3 rot, 4 gruen, 5 grau
+  local text_inline = dialog:GetCheckBox("DimTextInline") -- Masszahl in der Masslinie (wie Vectric)
   local show_scale  = dialog:GetCheckBox("ShowScale")
   local title       = dialog:GetTextField("Title") or ""
   local note        = dialog:GetTextField("Note") or ""
@@ -1680,7 +1767,9 @@ function main(script_path)
   reg:SetInt("SheetMode", sheet_mode)
   reg:SetBool("DrawBorder", draw_border)
   reg:SetBool("DimOverall", dim_overall)
+  reg:SetBool("DimOverallIn", overall_in)
   reg:SetBool("DimEach", dim_each)
+  reg:SetBool("DimEachIn", each_in)
   reg:SetBool("DimCircle", dim_circle)
   reg:SetBool("DimPoly", dim_poly)
   reg:SetDouble("MinDim", min_dim_mm)
@@ -1694,6 +1783,7 @@ function main(script_path)
     dim_overall, dim_each, dim_poly, dim_radius, dim_angle, dim_circle = false, false, false, false, false, false
   end
   reg:SetInt("DimColor", dim_color)
+  reg:SetBool("DimTextInline", text_inline)
   reg:SetBool("ShowScale", show_scale)
   reg:SetString("Title", title)
   reg:SetInt("Source", source)
@@ -1836,8 +1926,94 @@ function main(script_path)
     local near = 5 * MM                  -- Abstand Einzelmasse
     local far  = near + 2 * fs + 3 * MM  -- Abstand Gesamtmasse (mindestens)
     local lane = fs + 2.5 * MM           -- Abstand zwischen zwei Masslinien
+
+    -- Gerade Stuecke eines Pfads (Modellkoordinaten), fuer Innenmasse
+    local function PathSegs(p)
+      if p._isegs then return p._isegs end
+      local out, sx, sy, lx, ly = {}, nil, nil, nil, nil
+      for _, cmd in ipairs(p.cmds) do
+        local k = cmd[1]
+        if k == "m" then
+          sx, sy, lx, ly = cmd[2], cmd[3], cmd[2], cmd[3]
+        elseif k == "l" then
+          out[#out + 1] = { lx, ly, cmd[2], cmd[3] }; lx, ly = cmd[2], cmd[3]
+        elseif k == "c" then
+          local px, py = lx, ly
+          for i = 1, 16 do
+            local t = i / 16
+            local a, b, c, e = (1 - t) ^ 3, 3 * (1 - t) ^ 2 * t, 3 * (1 - t) * t * t, t ^ 3
+            local qx = a * lx + b * cmd[2] + c * cmd[4] + e * cmd[6]
+            local qy = a * ly + b * cmd[3] + c * cmd[5] + e * cmd[7]
+            out[#out + 1] = { px, py, qx, qy }; px, py = qx, qy
+          end
+          lx, ly = cmd[6], cmd[7]
+        elseif k == "h" and sx then
+          out[#out + 1] = { lx, ly, sx, sy }; lx, ly = sx, sy
+        end
+      end
+      p._isegs = out
+      return out
+    end
+    -- aeusserste Schnittpunkte einer waagrechten (horiz) bzw. senkrechten Linie bei v
+    local function Span(plist, horiz, v)
+      local lo, hi = nil, nil
+      for _, p in ipairs(plist) do
+        for _, sg in ipairs(PathSegs(p)) do
+          local a1, b1, a2, b2 = sg[1], sg[2], sg[3], sg[4]           -- x,y / x,y
+          if not horiz then a1, b1, a2, b2 = sg[2], sg[1], sg[4], sg[3] end
+          if (b1 - v) * (b2 - v) <= 0 and b1 ~= b2 then
+            local a = a1 + (v - b1) / (b2 - b1) * (a2 - a1)
+            if lo == nil or a < lo then lo = a end
+            if hi == nil or a > hi then hi = a end
+          end
+        end
+      end
+      return lo, hi
+    end
+    -- Lage fuer ein Innenmass: dort, wo das Teil am breitesten (bzw. hoechsten) ist.
+    -- Waagrechte Masse bevorzugt im oberen, senkrechte im linken Bereich,
+    -- damit sich die beiden Zahlen in der Mitte nicht treffen.
+    local function InnerPos(plist, v0, v1, horiz)
+      local fr = horiz and { 0.7, 0.75, 0.65, 0.8, 0.6, 0.85, 0.55, 0.5, 0.9, 0.45, 0.4 }
+                        or { 0.3, 0.25, 0.35, 0.2, 0.4, 0.15, 0.45, 0.5, 0.1, 0.55, 0.6 }
+      local best, bv, blo, bhi = -1, nil, nil, nil
+      for _, t in ipairs(fr) do
+        local v = v0 + (v1 - v0) * t
+        local lo, hi = Span(plist, horiz, v)
+        if lo and hi - lo > best * 1.001 + 1e-9 then best, bv, blo, bhi = hi - lo, v, lo, hi end
+      end
+      return bv, blo, bhi
+    end
+    -- Vectric-Bemassungen als feste Hindernisse (Seitenkoordinaten)
+    -- (erst nach Layout() aufrufen - braucht tx/ty)
+    local vfix_h, vfix_v, vfix_s = {}, {}, {}
+    local function BuildVfix()
+      vfix_h, vfix_v, vfix_s = {}, {}, {}
+      local tolv = 0.01
+      for _, l in ipairs(dim_lines or {}) do
+        if not l.angle then
+          local x1, y1, x2, y2 = tx(l[1]), ty(l[2]), tx(l[3]), ty(l[4])
+          local len = math.sqrt((l[3] - l[1]) ^ 2 + (l[4] - l[2]) ^ 2)
+          local lab = fmt(len)
+          local tw = TextWidth(lab, fs)
+          if math.abs(y2 - y1) < tolv * math.max(1, math.abs(x2 - x1)) then
+            local a, b = math.min(x1, x2), math.max(x1, x2)
+            vfix_h[#vfix_h + 1] = { a = a, b = b, line = (y1 + y2) / 2, label = lab,
+                                    lo = math.min(a, (a + b) / 2 - tw / 2) - 1 * MM,
+                                    hi = math.max(b, (a + b) / 2 + tw / 2) + 1 * MM }
+          elseif math.abs(x2 - x1) < tolv * math.max(1, math.abs(y2 - y1)) then
+            local a, b = math.min(y1, y2), math.max(y1, y2)
+            vfix_v[#vfix_v + 1] = { a = a, b = b, line = (x1 + x2) / 2, label = lab,
+                                    lo = math.min(a, (a + b) / 2 - tw / 2) - 1 * MM,
+                                    hi = math.max(b, (a + b) / 2 + tw / 2) + 1 * MM }
+          end
+          vfix_s[#vfix_s + 1] = { x1, y1, x2, y2 }
+        end
+      end
+    end
     local function PlanDims()
-      local hs, vs, cs, ls = {}, {}, {}, {}
+      BuildVfix()
+      local hs, vs, cs, ls, ins = {}, {}, {}, {}, {}
       local arrow_pt = (arrow_mm and arrow_mm > 0) and arrow_mm * MM or 2.5 * MM
       local function item(a, b, ref, line, label)
         local tw, mid = TextWidth(label, fs), (a + b) / 2
@@ -1881,11 +2057,24 @@ function main(script_path)
             else
               local same_w = dim_overall and math.abs(p.minx - vminx) < tol and math.abs(p.maxx - vmaxx) < tol
               local same_h = dim_overall and math.abs(p.miny - vminy) < tol and math.abs(p.maxy - vmaxy) < tol
-              if not same_w then
-                hs[#hs + 1] = item(tx(p.minx), tx(p.maxx), ty(p.miny), ty(p.miny) - near, fmt(pw))
-              end
-              if not same_h then
-                vs[#vs + 1] = item(ty(p.miny), ty(p.maxy), tx(p.minx), tx(p.minx) - near, fmt(ph))
+              if each_in then
+                -- innen: Masslinie durchs Teil, gemessen an der breitesten (hoechsten) Stelle
+                local pair = (not same_w) and (not same_h)     -- beide Masse im selben Teil
+                if not same_w then
+                  local y, lo, hi = InnerPos({ p }, p.miny, p.maxy, true)
+                  if y then ins[#ins + 1] = { h = true, a = tx(lo), b = tx(hi), pos = ty(y), label = fmt(hi - lo), pair = pair } end
+                end
+                if not same_h then
+                  local x, lo, hi = InnerPos({ p }, p.minx, p.maxx, false)
+                  if x then ins[#ins + 1] = { h = false, a = ty(lo), b = ty(hi), pos = tx(x), label = fmt(hi - lo), pair = pair } end
+                end
+              else
+                if not same_w then
+                  hs[#hs + 1] = item(tx(p.minx), tx(p.maxx), ty(p.miny), ty(p.miny) - near, fmt(pw))
+                end
+                if not same_h then
+                  vs[#vs + 1] = item(ty(p.miny), ty(p.maxy), tx(p.minx), tx(p.minx) - near, fmt(ph))
+                end
               end
             end
           end
@@ -1914,10 +2103,11 @@ function main(script_path)
         end
       end
       -- naechstgelegene zuerst; wer kollidiert, rutscht eine Spur weiter nach aussen
-      local function place(list, total)
+      local function place(list, total, fixed)
         table.sort(list, function(p, q) return p.ref > q.ref end)
         if total then list[#list + 1] = total end
         local done = {}
+        for _, q in ipairs(fixed or {}) do done[#done + 1] = q end   -- Vectric-Masse bleiben, wo sie sind
         for _, it in ipairs(list) do
           local moved = true
           while moved do
@@ -1933,39 +2123,116 @@ function main(script_path)
         end
       end
       local th, tv
-      if dim_overall then
+      -- Gesamtmass innen nur, wenn die Zeichnung aus einem Teil besteht (ein geschlossener
+      -- Vektor bildet den ganzen Umriss) - sonst liefe die Linie quer durch mehrere Teile
+      local one_part = false
+      if dim_overall and overall_in then
+        local tol1 = in_mm and 0.05 or 0.002
+        for _, p in ipairs(paths) do
+          if p.closed and math.abs(p.minx - vminx) < tol1 and math.abs(p.maxx - vmaxx) < tol1 and
+             math.abs(p.miny - vminy) < tol1 and math.abs(p.maxy - vmaxy) < tol1 then one_part = true end
+        end
+      end
+      if dim_overall and overall_in and one_part then
+        -- innen: ueber die ganze Breite/Hoehe, auf der Hoehe, wo die Zeichnung am breitesten ist
+        local all = {}
+        for _, p in ipairs(paths) do all[#all + 1] = p end
+        local y = InnerPos(all, vminy, vmaxy, true)
+        local x = InnerPos(all, vminx, vmaxx, false)
+        if y then ins[#ins + 1] = { h = true, a = tx(vminx), b = tx(vmaxx), pos = ty(y), label = fmt(vmaxx - vminx), pair = x ~= nil } end
+        if x then ins[#ins + 1] = { h = false, a = ty(vminy), b = ty(vmaxy), pos = tx(x), label = fmt(vmaxy - vminy), pair = y ~= nil } end
+      elseif dim_overall then
         th = item(tx(vminx), tx(vmaxx), ty(vminy), ty(vminy) - far, fmt(vmaxx - vminx))
         tv = item(ty(vminy), ty(vmaxy), tx(vminx), tx(vminx) - far, fmt(vmaxy - vminy))
       end
       -- doppelte Masse (gleicher Wert, praktisch gleiche Strecke) nur 1x zeigen, auch gegen Gesamtmass
-      local function dedupe(list, total)
+      local function same(p, q)
+        local t = math.max(1.5 * MM, 0.02 * math.abs(q.b - q.a))
+        return p.label == q.label and math.abs(p.a - q.a) < t and math.abs(p.b - q.b) < t
+      end
+      local function dedupe(list, total, fixed)
         table.sort(list, function(p, q) return p.ref > q.ref end)   -- naechstgelegenes bleibt
         local out = {}
-        local function same(p, q)
-          local t = math.max(1.5 * MM, 0.02 * math.abs(q.b - q.a))
-          return p.label == q.label and math.abs(p.a - q.a) < t and math.abs(p.b - q.b) < t
-        end
         for _, it in ipairs(list) do
           local dup = total and same(it, total)
+          for _, q in ipairs(fixed) do if not dup and same(it, q) then dup = true end end   -- schon als Vectric-Mass da
           for _, q in ipairs(out) do if not dup and same(it, q) then dup = true end end
           if not dup then out[#out + 1] = it end
         end
         return out
       end
-      hs = dedupe(hs, th); vs = dedupe(vs, tv)
-      place(hs, th); place(vs, tv)
+      -- Gesamtmass, das es schon als Vectric-Bemassung gibt, nicht doppelt zeichnen
+      if th then for _, q in ipairs(vfix_h) do if same(th, q) then th = nil; break end end end
+      if tv then for _, q in ipairs(vfix_v) do if same(tv, q) then tv = nil; break end end end
+      hs = dedupe(hs, th, vfix_h); vs = dedupe(vs, tv, vfix_v)
+      -- Innenmasse ebenfalls nicht doppelt
+      do
+        local keep = {}
+        for _, it in ipairs(ins) do
+          local dup = false
+          for _, q in ipairs(it.h and vfix_h or vfix_v) do if same(it, q) then dup = true end end
+          for _, q in ipairs(keep) do if q.h == it.h and same(it, q) then dup = true end end
+          if not dup then keep[#keep + 1] = it end
+        end
+        ins = keep
+      end
+      place(hs, th, vfix_h); place(vs, tv, vfix_v)
+
+      -- Schraege Masse: Abstand so weit vergroessern, bis die Masslinie samt Zahl frei liegt
+      local boxes = {}
+      for _, it in ipairs(hs) do boxes[#boxes + 1] = { it.lo, it.line - 0.5 * fs, it.hi, it.line + 1.3 * fs } end
+      for _, it in ipairs(vs) do boxes[#boxes + 1] = { it.line - 1.3 * fs, it.lo, it.line + 0.5 * fs, it.hi } end
+      for _, it in ipairs(vfix_h) do boxes[#boxes + 1] = { it.lo, it.line - 0.8 * fs, it.hi, it.line + 1.3 * fs } end
+      for _, it in ipairs(vfix_v) do boxes[#boxes + 1] = { it.line - 1.3 * fs, it.lo, it.line + 0.8 * fs, it.hi } end
+      for _, it in ipairs(ins) do
+        if it.h then boxes[#boxes + 1] = { it.a, it.pos - 0.6 * fs, it.b, it.pos + 0.9 * fs }
+        else boxes[#boxes + 1] = { it.pos - 0.9 * fs, it.a, it.pos + 0.6 * fs, it.b } end
+      end
+      local function hit(x, y, r)
+        for _, b in ipairs(boxes) do
+          if x + r > b[1] and x - r < b[3] and y + r > b[2] and y - r < b[4] then return true end
+        end
+        return false
+      end
+      for _, l in ipairs(ls) do
+        local x1, y1, x2, y2 = l[1], l[2], l[3], l[4]
+        local len = math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2)
+        local nx, ny = -(y2 - y1) / len, (x2 - x1) / len
+        if ny > 1e-9 or (math.abs(ny) <= 1e-9 and nx > 0) then nx, ny = -nx, -ny end   -- wie offsetDim
+        local off = near
+        for _ = 1, 8 do
+          local busy = false
+          for i = 0, 12 do
+            local t = i / 12
+            local px = x1 + (x2 - x1) * t + nx * off
+            local py = y1 + (y2 - y1) * t + ny * off
+            if hit(px, py, 0.5 * fs) then busy = true; break end
+          end
+          if not busy then break end
+          off = off + lane
+        end
+        l.off = off
+        -- belegte Flaeche merken, damit weitere schraege Masse ausweichen
+        local ax, ay, bx, by = x1 + nx * off, y1 + ny * off, x2 + nx * off, y2 + ny * off
+        l.ex, l.ey = math.min(ax, bx) - fs, math.min(ay, by) - fs     -- aeusserste Ecke samt Zahl
+        boxes[#boxes + 1] = { math.min(ax, bx) - 0.5 * fs, math.min(ay, by) - 0.5 * fs,
+                              math.max(ax, bx) + 0.5 * fs, math.max(ay, by) + 0.5 * fs }
+      end
       -- benoetigter Platz unter bzw. links neben der Zeichnung
       local depth = 0
       for _, it in ipairs(hs) do depth = math.max(depth, ty(vminy) - it.line) end
       for _, it in ipairs(vs) do depth = math.max(depth, tx(vminx) - it.line) end
-      return hs, vs, cs, depth, ls
+      for _, l in ipairs(ls) do                      -- weit versetzte schraege Masse brauchen Platz
+        if l.ex then depth = math.max(depth, tx(vminx) - l.ex, ty(vminy) - l.ey) end
+      end
+      return hs, vs, cs, depth, ls, ins
     end
 
     Layout(dim_res)
-    local hdims, vdims, cdims, depth, ldims = PlanDims()
+    local hdims, vdims, cdims, depth, ldims, idims = PlanDims()
     if depth > dim_res + 0.5 then        -- mehr Spuren noetig -> mehr Platz reservieren
       Layout(depth)
-      hdims, vdims, cdims, _, ldims = PlanDims()
+      hdims, vdims, cdims, _, ldims, idims = PlanDims()
     end
 
     -- 1) Zeichnung
@@ -2004,6 +2271,7 @@ function main(script_path)
     if not dim_line_mm or dim_line_mm <= 0 then dim_line_mm = 0.25 end
     local d = Draw.new(fs, dim_line_mm * MM)
     if arrow_mm and arrow_mm > 0 then d.arrow = arrow_mm * MM end
+    d.inline = text_inline
     d:add("q " .. f(dim_line_mm * MM) .. " w " .. ColorOps(dim_color))
     for _, it in ipairs(hdims) do d:hdim(it.a, it.b, it.ref, it.line, it.label) end
     for _, it in ipairs(vdims) do d:vdim(it.a, it.b, it.ref, it.line, it.label) end
@@ -2016,7 +2284,18 @@ function main(script_path)
         d:radius(c[1], c[2], c[1] + c[3] * math.cos(a0), c[2] + c[3] * math.sin(a0), c[4], a0 - math.pi, 2 * math.pi)
       end
     end
-    for _, l in ipairs(ldims) do d:offsetDim(l[1], l[2], l[3], l[4], l[5], near) end
+    for _, l in ipairs(ldims) do d:offsetDim(l[1], l[2], l[3], l[4], l[5], l.off or near) end
+    -- Innenmasse (Masslinie durchs Teil, ohne Masshilfslinien)
+    -- erst die waagrechten; ihre Linien sind dann Hindernis fuer die senkrechten Zahlen
+    for _, it in ipairs(idims) do
+      if it.h then
+        d:hdim(it.a, it.b, it.pos, it.pos, it.label, it.pair and "pair" or true)
+        d.boxes[#d.boxes + 1] = { it.a, it.pos - 0.3 * MM, it.b, it.pos + 0.3 * MM }
+      end
+    end
+    for _, it in ipairs(idims) do
+      if not it.h then d:vdim(it.a, it.b, it.pos, it.pos, it.label, it.pair and "pair" or true) end
+    end
 
     -- Radien an Boegen: alle Boegen; mit "gleiche Radien nur einmal" je Vektor jeder Radius nur 1x
     if dim_radius then

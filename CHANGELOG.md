@@ -12,6 +12,19 @@ Neueste Version steht oben.
   Vectric-Bemaßungen und Autobemaßung funktionieren unverändert.
 
 ### Neu (nach beta.4)
+- **Autobemaßung innen oder außen**: Bei „Gesamtmaße“ und „Maße jedes Vektors“ gibt es je ein Häkchen „innen“.
+  Innen läuft die Maßlinie durchs Teil (ohne Maßhilfslinien), an der breitesten bzw. höchsten Stelle und mit dem
+  dort gemessenen Wert. Bekommt ein Teil beide Innenmaße, liegt das waagrechte oben (Zahl rechts) und das senkrechte
+  links (Zahl unten), damit sich nichts überdeckt. Gesamtmaße innen nur, wenn die Zeichnung aus einem Teil besteht –
+  sonst bleiben sie außen.
+- **Weniger Überlagerungen**: Schräge Maße (z. B. eine fast waagrechte Einzellinie) prüfen, ob ihr Platz frei ist, und
+  rücken sonst eine Spur weiter nach außen. Übernommene Vectric-Bemaßungen gelten für die Autobemaßung als belegt.
+- **Keine doppelten Maße mit Vectric**: Gibt es für eine Strecke schon eine Vectric-Bemaßung mit gleichem Wert,
+  zeichnet die Autobemaßung dieses Maß nicht noch einmal.
+- **Maßzahl in der Maßlinie (wie Vectric)**: Neue Einstellung im Bemaßungs-Bereich (Standard: an). Die Zahl sitzt
+  mittig in der Maßlinie, die Linie ist um die Zahl unterbrochen – bei waagrechten, senkrechten und schrägen Maßen,
+  übernommenen Vectric-Bemaßungen und Durchmessern. Ausgeschaltet steht die Zahl wie bisher über bzw. neben der Linie.
+  Zu kurze Maße (Zahl passt nicht zwischen die Pfeile) und Winkel bleiben unverändert.
 - **Vectric-Bemaßungen im PDF**: Waagrechte und senkrechte Bemaßungen aus VCarve werden automatisch ins PDF
   übernommen – mit Maßlinie, Pfeilen, Zahl und Hilfslinien. Gesteuert wird das über die Layer in VCarve:
   ist der Layer mit den Bemaßungen eingeschaltet, erscheinen sie im PDF, sonst nicht. An der Zeichnung
