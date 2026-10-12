@@ -103,6 +103,7 @@
   table.amtab td { padding: 0.05em 1.2em 0.05em 0; white-space: nowrap; }
   td.amsub { padding-left: 1.6em !important; }
   .amfoot { margin-top: 0.3em; padding-top: 0.25em; border-top: 1px solid #cfe7e8; }
+  .fwarn { color: #b8452a; font-weight: bold; }
   .hidecb { position: absolute; left: -9999px; top: 0; }
   table.dsl { border-collapse: collapse; margin: 0.2em 0 0.1em 0; }
   table.dsl td { padding: 0 0.4em; vertical-align: top; }
@@ -215,7 +216,8 @@
       <td><input class="num" type="text" id="ArrowSize"> mm
       <span class="hint t" data-en="&nbsp;length of arrow heads (default 2.5)">&nbsp;Länge der Pfeilspitzen (Standard 2,5)</span></td></tr>
     <tr><td><span class="t" data-en="Font size:">Schriftgröße:</span></td>
-      <td><input class="num" type="text" id="FontSize"> mm</td></tr>
+      <td><input class="num" type="text" id="FontSize"> mm
+      <span id="FontWarn" class="fwarn" style="display:none"><span class="t" data-en="&nbsp;large for A4 – drawing gets small">&nbsp;groß für A4 – Zeichnung wird klein</span></span></td></tr>
     <tr><td></td>
       <td><label><input type="checkbox" id="DimAutoSize"> <span class="t" data-en="Scale with drawing:">Mit Maßstab skalieren:</span></label>
         <input class="num" type="text" id="DimModelSize" style="width:3.5em"> <span class="t" data-en="mm in drawing, min.">mm in der Zeichnung, min.</span>
@@ -559,6 +561,16 @@ function dslDown(e) {
   document.onmouseup = function () { dslDrag = false; document.onmousemove = null; document.onmouseup = null; };
   return false;
 }
+// Hinweis bei grosser Schrift auf A4 (bei 1:1 ist eine grosse Schrift normal)
+function syncFontWarn() {
+  var f = document.getElementById("FontSize"), w = document.getElementById("FontWarn");
+  if (!f || !w) return;
+  var v = parseFloat((f.value || "").replace(",", "."));
+  var r = document.getElementsByName("ScaleMode"), mode = "1";
+  for (var i = 0; i < r.length; i++) { if (r[i].checked) mode = r[i].value; }
+  var show = (mode != "2" && !isNaN(v) && v > 10);
+  w.style.display = show ? "inline" : "none";
+}
 function syncAutoMenu() {
   var cb = document.getElementById("DimAuto"), m = document.getElementById("AutoMenu"), h = document.getElementById("DimHide");
   if (cb && m) m.className = (cb.checked && !(h && h.checked)) ? "automenu" : "automenu dim";
@@ -570,7 +582,7 @@ function showPathEnd() {
   if (!e) return;
   try { e.scrollLeft = e.scrollWidth; } catch (x) {}
 }
-function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); syncSlider(); syncAutoMenu(); applyZoom(false); }
+function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); syncSlider(); syncAutoMenu(); syncFontWarn(); applyZoom(false); }
 
 window.onload = function () {
   reportScreen();

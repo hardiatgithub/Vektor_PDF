@@ -18,6 +18,10 @@ Neueste Version steht oben.
     (der frühere Zustand „Auto aus + Vectric aus“ wird beim ersten Start zu diesem Haken).
   - Rechts der Knopf **„Auto-Einstellungen ►“** öffnet ein neu geordnetes Menü: eine Zeile je Maßart, „innen“ in einer
     eigenen Spalte, „Einzelmaße ab“ unten abgesetzt. Ausgegraut, wenn die Autobemaßung nicht aktiv ist.
+- **Behoben: Radius am Kreis fehlte**, wenn die Vectric-Radiuslinie senkrecht oder waagrecht vom Mittelpunkt
+  läuft und die Zahl daneben steht (Pfeilspitze mitten auf der Rahmenkante statt in einer Ecke).
+- **Hinweis bei großer Schrift auf A4:** Schriftgröße über 10 mm bei „Auf A4 einpassen“ oder festem Maßstab zeigt
+  „groß für A4 – Zeichnung wird klein“ neben dem Feld (bei 1:1 kein Hinweis, dort sind große Schriften normal).
 - **Bemaßung mit Maßstab skalieren** (Bereich „Bemaßung“): Schrifthöhe in der Zeichnung (Standard 10 mm) × Maßstab,
   begrenzt auf die eingestellte Schriftgröße (oben) und eine Mindestgröße (Standard 2 mm). Beispiel 1:5 → 2 mm,
   1:2 → 3,5 mm. Pfeile und Abstände der Maßlinien wachsen bzw. schrumpfen mit; Titel und Fußzeile bleiben gleich.

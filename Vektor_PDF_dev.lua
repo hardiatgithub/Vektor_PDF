@@ -757,6 +757,27 @@ local function VectricDimLine(job, obj, in_mm, known_k)
         if dd < bd then best, bd = { a = a, x = c[1], y = c[2] }, dd end
       end
     end
+    if not best then
+      -- Radiuslinie senkrecht/waagrecht vom Mittelpunkt, Zahl daneben: die Pfeilspitze liegt
+      -- dann nicht in einer Rahmenecke, sondern mitten auf einer Rahmenkante (Scheitel des Kreises)
+      local tp = 2 * math.pi
+      for _, a in ipairs(snap_arcs or {}) do
+        if a.cx > x0 - tb and a.cx < x1 + tb and a.cy > y0 - tb and a.cy < y1 + tb then
+          for k = 0, 3 do
+            local ang = k * math.pi / 2
+            local t = (a.sw >= 0) and ((ang - a.sa) % tp) or ((a.sa - ang) % tp)
+            if t > tp - 1e-6 then t = 0 end
+            if t <= math.abs(a.sw) + 1e-6 then
+              local qx, qy = a.cx + a.r * math.cos(ang), a.cy + a.r * math.sin(ang)
+              if qx > x0 - tb and qx < x1 + tb and qy > y0 - tb and qy < y1 + tb then
+                local dd = math.min(math.abs(qx - x0), math.abs(qx - x1), math.abs(qy - y0), math.abs(qy - y1))
+                if dd < bd then best, bd = { a = a, x = qx, y = qy }, dd end
+              end
+            end
+          end
+        end
+      end
+    end
     if best then
       local a = best.a
       local ang = atan2(best.y - a.cy, best.x - a.cx)
