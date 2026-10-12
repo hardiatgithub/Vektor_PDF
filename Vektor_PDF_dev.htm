@@ -88,6 +88,36 @@
   input[type=text]:focus { border-color: #2b84c6; background: #fff; outline: none; }
   h2 input.ver, h2 input.ver:focus { border: 0; background: transparent; color: #cfe3f5; }
   input.off { background: #e4e4e4; color: #999; border-color: #ccc; }
+  td.dhide { white-space: nowrap; padding-top: 0.25em; }
+  td.dset { white-space: nowrap; padding-top: 0.1em; }
+  .abtn { display: inline-block; text-decoration: none; color: #1f5f60; background: #eef8f8;
+          border: 1px solid #9fd3d5; border-radius: 4px; padding: 0.1em 0.5em; }
+  .abtn:hover { background: #ddf1f2; border-color: #2a9a9f; }
+  .abtn.dim { color: #a9a9a9; border-color: #ddd; background: #f6f6f6; }
+  .dsl.dim .dtrack, .dsl.dim .dknob { border-color: #ccc; }
+  .dsl.dim .dfill { background: #c8c8c8; }
+  .dsl.dim .dstop, .dsl.dim .dstop.on { color: #b5b5b5; }
+  .automenu { padding: 0.3em 0.6em; margin: 0.2em 0 0.4em 0; }
+  .amhead { font-weight: bold; color: #1f5f60; margin-bottom: 0.2em; }
+  table.amtab { border-collapse: collapse; }
+  table.amtab td { padding: 0.05em 1.2em 0.05em 0; white-space: nowrap; }
+  td.amsub { padding-left: 1.6em !important; }
+  .amfoot { margin-top: 0.3em; padding-top: 0.25em; border-top: 1px solid #cfe7e8; }
+  .hidecb { position: absolute; left: -9999px; top: 0; }
+  table.dsl { border-collapse: collapse; margin: 0.2em 0 0.1em 0; }
+  table.dsl td { padding: 0 0.4em; vertical-align: top; }
+  td.dend { font-weight: bold; color: #1f5f60; white-space: nowrap; padding-top: 0.15em; }
+  td.dmid { width: 11em; }
+  .dtrack { position: relative; height: 0.5em; margin: 0.45em 0.6em 0.35em 0.6em;
+            background: #d5e6e7; border: 1px solid #9fd3d5; border-radius: 0.3em; cursor: pointer; }
+  .dfill { position: absolute; left: 0; top: 0; height: 100%; background: #2a9a9f; border-radius: 0.3em; }
+  .dknob { position: absolute; top: -0.45em; width: 1.2em; height: 1.2em; margin-left: -0.65em;
+           background: #fff; border: 2px solid #2a9a9f; border-radius: 0.7em; cursor: pointer; }
+  table.dstops { width: 100%; border-collapse: collapse; }
+  table.dstops td { padding: 0; width: 33%; white-space: nowrap; }
+  .dstop { color: #6b7c8c; cursor: pointer; }
+  .dstop:hover { color: #1f5f99; }
+  .dstop.on { color: #1f5f60; font-weight: bold; }
   .dbtn { background: #eef8f8; border: 1px solid #9fd3d5; border-radius: 12px; padding: 0.15em 0.6em; }
   .dbtn:hover { background: #ddf1f2; border-color: #2a9a9f; }
   .dmore { color: #2a9a9f; font-weight: bold; }
@@ -139,23 +169,37 @@
   <legend><span class="t" data-en="Dimensions">Bemaßung</span></legend>
   <div class="vhint"><span class="t" data-en="Vectric dimensions are largely taken over and redrawn – auto dimensions instead or in addition.">Vectric-Bemaßungen werden weitgehend übernommen und neu gezeichnet – Autobemaßung alternativ oder ergänzend.</span></div>
   <div class="dimbtns">
-    <span class="dbtn" title="Weitere Einstellungen: auf ► klicken" data-title-en="More settings: click ►"><label><input type="checkbox" id="DimAuto" onclick="syncAll()"> <span class="t" data-en="Auto dimensions">Autobemaßung</span></label>
-      <a href="#" class="dmore" onclick="toggleAutoMenu(); return false;"><span id="AutoArrow">&#9658;</span></a></span>
-    <span class="dbtn" title="Empfohlen, wenn Autobemaßung verwendet wird" data-title-en="Recommended when using auto dimensions"><label><input type="checkbox" id="VDimOff"> <span class="t" data-en="Vectric dimensions off">Vectric-Bemaßung aus</span></label></span>
+    <span class="hidecb"><input type="checkbox" id="DimAuto"><input type="checkbox" id="VDimOff"></span>
+    <table class="dsl"><tr>
+      <td class="dhide"><label title="Keine Bemaßung ins PDF (Regler bleibt gemerkt)" data-title-en="No dimensions in the PDF (slider setting is kept)"><input type="checkbox" id="DimHide" onclick="syncAll()"> <span class="t" data-en="Hide dimensions">Bemaßung ausblenden</span></label></td>
+      <td class="dmid" id="DimMid">
+        <div id="DimTrack" class="dtrack" onmousedown="dslDown(event)" title="Welche Bemaßung ins PDF? Schieben oder klicken" data-title-en="Which dimensions go into the PDF? Drag or click">
+          <div id="DimFill" class="dfill"></div><span id="DimKnob" class="dknob"></span></div>
+        <table class="dstops"><tr>
+          <td id="DStop0" class="dstop" style="text-align:left" onclick="dslSet(0)" title="Nur die übernommenen Vectric-Bemaßungen" data-title-en="Only the redrawn Vectric dimensions"><span class="t" data-en="Vectric">Vectric</span></td>
+          <td id="DStop1" class="dstop" style="text-align:center" onclick="dslSet(1)" title="Vectric-Bemaßungen und Autobemaßung" data-title-en="Vectric dimensions and auto dimensions"><span class="t" data-en="both">beide</span></td>
+          <td id="DStop2" class="dstop" style="text-align:right" onclick="dslSet(2)" title="Nur Autobemaßung – Vectric-Bemaßungen aus (empfohlen bei Überschneidungen)" data-title-en="Auto dimensions only – Vectric dimensions off (recommended if they overlap)"><span class="t" data-en="Auto">Auto</span></td>
+        </tr></table>
+      </td>
+      <td class="dset"><a href="#" id="AutoBtn" class="abtn" onclick="toggleAutoMenu(); return false;" title="Was die Autobemaßung bemaßt" data-title-en="What auto dimensioning measures"><span class="t" data-en="Auto settings">Auto-Einstellungen</span> <span id="AutoArrow">&#9658;</span></a></td>
+    </tr></table>
   </div>
   <div id="AutoMenu" class="automenu" style="display:none">
-    <label><input type="checkbox" id="DimOverall"> <span class="t" data-en="Overall dimensions (width × height)">Gesamtmaße (Breite × Höhe)</span></label>
-      <label style="margin-left:10px"><input type="checkbox" id="DimOverallIn"> <span class="t" data-en="inside">innen</span></label><br>
-    <label><input type="checkbox" id="DimEach"> <span class="t" data-en="Dimensions of each vector (single lines as length)">Maße jedes Vektors (Einzellinien als Länge)</span></label>
-      <label style="margin-left:10px"><input type="checkbox" id="DimEachIn"> <span class="t" data-en="inside">innen</span></label><br>
-    <label><input type="checkbox" id="DimCircle"> <span class="t" data-en="Circles (radius R)">Kreise (Radius R)</span></label><br>
-    <label><input type="checkbox" id="DimPoly"> <span class="t" data-en="Open polylines: each straight segment">Offene Polylinien: jedes gerade Stück</span></label><br>
-    <label><input type="checkbox" id="DimRadius"> <span class="t" data-en="Radii on arcs (R …)">Radien an Bögen (R …)</span></label><br>
-    <label style="margin-left:18px"><input type="checkbox" id="DimRadiusOnce"> <span class="t" data-en="equal radii only once per vector">gleiche Radien nur einmal (je Vektor)</span></label><br>
-    <label><input type="checkbox" id="DimRadiusIn"> <span class="t" data-en="Radius inside (line from centre, like Vectric)">Radius innen (Linie vom Mittelpunkt, wie Vectric)</span></label><br>
-    <label><input type="checkbox" id="DimAngle"> <span class="t" data-en="Angles at corners (except 90°)">Winkel an Ecken (ohne 90°)</span></label><br>
-    <span class="t" data-en="Min. size:">Einzelmaße ab:</span> <input class="num" type="text" id="MinDim"> mm
-    <span class="hint t" data-en="&nbsp;smaller vectors (e.g. letters) get no dimension · 0 = all">&nbsp;kleinere Vektoren (z. B. Buchstaben) ohne Maß · 0 = alle</span>
+    <div class="amhead"><span class="t" data-en="Auto dimensions – what to measure">Autobemaßung – was wird bemaßt?</span></div>
+    <table class="amtab">
+      <tr><td><label><input type="checkbox" id="DimOverall"> <span class="t" data-en="Overall size (width × height)">Gesamtmaße (Breite × Höhe)</span></label></td>
+          <td><label><input type="checkbox" id="DimOverallIn"> <span class="t" data-en="inside">innen</span></label></td></tr>
+      <tr><td><label><input type="checkbox" id="DimEach"> <span class="t" data-en="Each vector (single lines as length)">Jeder Vektor (Einzellinien als Länge)</span></label></td>
+          <td><label><input type="checkbox" id="DimEachIn"> <span class="t" data-en="inside">innen</span></label></td></tr>
+      <tr><td><label><input type="checkbox" id="DimRadius"> <span class="t" data-en="Radii on arcs (R …)">Radien an Bögen (R …)</span></label></td>
+          <td><label title="Linie vom Mittelpunkt, wie Vectric" data-title-en="Line from the centre, like Vectric"><input type="checkbox" id="DimRadiusIn"> <span class="t" data-en="inside">innen</span></label></td></tr>
+      <tr><td class="amsub"><label><input type="checkbox" id="DimRadiusOnce"> <span class="t" data-en="equal radii only once per vector">gleiche Radien nur einmal je Vektor</span></label></td><td></td></tr>
+      <tr><td><label><input type="checkbox" id="DimCircle"> <span class="t" data-en="Circles (radius R)">Kreise (Radius R)</span></label></td><td></td></tr>
+      <tr><td><label><input type="checkbox" id="DimPoly"> <span class="t" data-en="Open polylines: each straight segment">Offene Polylinien: jedes gerade Stück</span></label></td><td></td></tr>
+      <tr><td><label><input type="checkbox" id="DimAngle"> <span class="t" data-en="Angles at corners (except 90°)">Winkel an Ecken (ohne 90°)</span></label></td><td></td></tr>
+    </table>
+    <div class="amfoot"><span class="t" data-en="Single dimensions from:">Einzelmaße ab:</span> <input class="num" type="text" id="MinDim"> mm
+    <span class="hint t" data-en="&nbsp;smaller vectors (e.g. letters) get none · 0 = all">&nbsp;kleinere Vektoren (z. B. Buchstaben) ohne Maß · 0 = alle</span></div>
   </div>
   <table>
     <tr><td><span class="t" data-en="Colour:">Farbe:</span></td><td>
@@ -462,9 +506,62 @@ function onScalePick(sel) {
   pickScale3();
   sel.selectedIndex = 0;
 }
+// Bemassungs-Regler: 0 = nur Vectric, 1 = beide, 2 = nur Auto.
+// Gespeichert wird weiter in den (versteckten) Haken DimAuto und VDimOff.
+function dslGet() {
+  var a = document.getElementById("DimAuto"), v = document.getElementById("VDimOff");
+  if (!a || !v) return 1;
+  if (!a.checked) { v.checked = false; return 0; }   // alter Zustand "gar keine" -> Haken "ausblenden"
+  return v.checked ? 2 : 1;
+}
+function dslSet(pos) {
+  var a = document.getElementById("DimAuto"), v = document.getElementById("VDimOff");
+  if (!a || !v) return;
+  a.checked = (pos >= 1);
+  v.checked = (pos == 2);
+  var h = document.getElementById("DimHide");
+  if (h) h.checked = false;                          // Regler bedient -> Bemassung wieder an
+  syncSlider(); syncAutoMenu();
+}
+function syncSlider() {
+  var pos = dslGet(), k = document.getElementById("DimKnob"), f = document.getElementById("DimFill");
+  if (k) k.style.left = (pos * 50) + "%";
+  if (f) {
+    f.style.left = (pos == 2 ? 50 : 0) + "%";
+    f.style.width = (pos == 1 ? 100 : 50) + "%";
+  }
+  for (var i = 0; i < 3; i++) {
+    var e = document.getElementById("DStop" + i);
+    if (e) e.className = (i == pos) ? "dstop on" : "dstop";
+  }
+  var h = document.getElementById("DimHide"), hid = (h && h.checked);
+  var tb = document.getElementById("DimTrack");
+  var tab = tb ? tb.parentNode.parentNode.parentNode.parentNode : null;   // table.dsl
+  if (tab) tab.className = hid ? "dsl dim" : "dsl";
+  var b = document.getElementById("AutoBtn");
+  if (b) b.className = (hid || pos == 0) ? "abtn dim" : "abtn";
+}
+var dslDrag = false;
+function dslFromX(x) {
+  var t = document.getElementById("DimTrack");
+  if (!t) return;
+  var r = t.getBoundingClientRect(), w = r.right - r.left;
+  if (w <= 0) return;
+  var p = Math.round((x - r.left) / w * 2);
+  if (p < 0) p = 0; if (p > 2) p = 2;
+  if (p != dslGet()) dslSet(p);
+}
+function dslDown(e) {
+  e = e || window.event;
+  dslDrag = true;
+  dslFromX(e.clientX);
+  document.onmousemove = function (ev) { ev = ev || window.event; if (dslDrag) dslFromX(ev.clientX); return false; };
+  document.onmouseup = function () { dslDrag = false; document.onmousemove = null; document.onmouseup = null; };
+  return false;
+}
 function syncAutoMenu() {
-  var cb = document.getElementById("DimAuto"), m = document.getElementById("AutoMenu");
-  if (cb && m) m.className = cb.checked ? "automenu" : "automenu dim";
+  var cb = document.getElementById("DimAuto"), m = document.getElementById("AutoMenu"), h = document.getElementById("DimHide");
+  if (cb && m) m.className = (cb.checked && !(h && h.checked)) ? "automenu" : "automenu dim";
 }
 
 // Langer Pfad: ans Ende rollen, damit der Dateiname sichtbar ist
@@ -473,7 +570,7 @@ function showPathEnd() {
   if (!e) return;
   try { e.scrollLeft = e.scrollWidth; } catch (x) {}
 }
-function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); syncAutoMenu(); applyZoom(false); }
+function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); syncSlider(); syncAutoMenu(); applyZoom(false); }
 
 window.onload = function () {
   reportScreen();

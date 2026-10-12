@@ -12,6 +12,12 @@ Neueste Version steht oben.
   Vectric-Bemaßungen und Autobemaßung funktionieren unverändert.
 
 ### Neu (nach beta.4)
+- **Bemaßungs-Regler** (Bereich „Bemaßung“): ein Schieber mit drei Stufen *Vectric · beide · Auto* ersetzt die Haken
+  „Autobemaßung“ und „Vectric-Bemaßung aus“ (ziehen oder auf die Stufe klicken).
+  - Links daneben **„Bemaßung ausblenden“**: gar keine Maße ins PDF, die Regler-Stellung bleibt gemerkt
+    (der frühere Zustand „Auto aus + Vectric aus“ wird beim ersten Start zu diesem Haken).
+  - Rechts der Knopf **„Auto-Einstellungen ►“** öffnet ein neu geordnetes Menü: eine Zeile je Maßart, „innen“ in einer
+    eigenen Spalte, „Einzelmaße ab“ unten abgesetzt. Ausgegraut, wenn die Autobemaßung nicht aktiv ist.
 - **Bemaßung mit Maßstab skalieren** (Bereich „Bemaßung“): Schrifthöhe in der Zeichnung (Standard 10 mm) × Maßstab,
   begrenzt auf die eingestellte Schriftgröße (oben) und eine Mindestgröße (Standard 2 mm). Beispiel 1:5 → 2 mm,
   1:2 → 3,5 mm. Pfeile und Abstände der Maßlinien wachsen bzw. schrumpfen mit; Titel und Fußzeile bleiben gleich.

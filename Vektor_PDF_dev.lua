@@ -1882,6 +1882,9 @@ function main(script_path)
   dialog:AddCheckBox("DrawBorder", reg:GetBool("DrawBorder", false))
   dialog:AddCheckBox("DimAuto", reg:GetBool("DimAuto", true))
   dialog:AddCheckBox("VDimOff", reg:GetBool("VDimOff", false))
+  -- "Bemassung ausblenden": alter Zustand Auto aus + Vectric aus wird zu diesem Haken
+  dialog:AddCheckBox("DimHide", reg:GetBool("DimHide",
+                     (not reg:GetBool("DimAuto", true)) and reg:GetBool("VDimOff", false)))
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
   dialog:AddCheckBox("DimOverallIn", reg:GetBool("DimOverallIn", false))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
@@ -1984,6 +1987,7 @@ function main(script_path)
   local dim_angle   = dialog:GetCheckBox("DimAngle")
   local dim_auto    = dialog:GetCheckBox("DimAuto")
   vdims_off         = dialog:GetCheckBox("VDimOff")          -- Vectric-Bemassungen nicht ins PDF
+  local dim_hide    = dialog:GetCheckBox("DimHide")          -- gar keine Bemassung ins PDF
   local dim_layer   = ""                   -- individuelle Bemassung ausgebaut (Branch individ_bem)
   local hide_dims   = false
   local dim_color   = dialog:GetRadioIndex("DimColor")   -- 1 schwarz, 2 blau, 3 rot, 4 gruen, 5 grau
@@ -2024,6 +2028,10 @@ function main(script_path)
   reg:SetBool("DimAngle", dim_angle)
   reg:SetBool("DimAuto", dim_auto)
   reg:SetBool("VDimOff", vdims_off)
+  reg:SetBool("DimHide", dim_hide)
+  if dim_hide then                  -- ausgeblendet: Regler-Stellung bleibt gemerkt, gedruckt wird nichts
+    dim_auto, vdims_off = false, true
+  end
 
   if not dim_auto then              -- Autobemassung aus: alle automatischen Masse aus (Haekchen bleiben gemerkt)
     dim_overall, dim_each, dim_poly, dim_radius, dim_angle, dim_circle = false, false, false, false, false, false
