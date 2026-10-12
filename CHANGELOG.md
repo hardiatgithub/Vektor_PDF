@@ -18,6 +18,9 @@ Neueste Version steht oben.
     (der frühere Zustand „Auto aus + Vectric aus“ wird beim ersten Start zu diesem Haken).
   - Rechts der Knopf **„Auto-Einstellungen ►“** öffnet ein neu geordnetes Menü: eine Zeile je Maßart, „innen“ in einer
     eigenen Spalte, „Einzelmaße ab“ unten abgesetzt. Ausgegraut, wenn die Autobemaßung nicht aktiv ist.
+- **Behoben: Innenmaße bei gleichen Teilen nur einmal** (Hinweis von Gremlin): Gleich große Teile nebeneinander
+  bekamen das Höhenmaß „innen“ nur beim ersten Teil, weil es als doppelt galt. Jetzt zählt ein Innenmaß nur dann als
+  doppelt, wenn es auch an derselben Stelle liegt – jedes Teil bekommt seine Breite und Höhe.
 - **Tooltips für „innen“** im Menü Auto-Einstellungen: erklären beim Drüberfahren, was „innen“ bei Gesamtmaßen,
   Einzelmaßen und Radien bedeutet (deutsch/englisch).
 - **Papierformat US Letter** (Bereich „Seite“, „Papier: A4 / Letter“): 8,5 × 11 Zoll für „Einpassen“ und festen

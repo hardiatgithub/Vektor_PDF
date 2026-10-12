@@ -2559,7 +2559,10 @@ function main(script_path)
         for _, it in ipairs(ins) do
           local dup = false
           for _, q in ipairs(it.h and vfix_h or vfix_v) do if same(it, q) then dup = true end end
-          for _, q in ipairs(keep) do if q.h == it.h and same(it, q) then dup = true end end
+          -- nur doppelt, wenn auch an derselben Stelle (gleiche Teile nebeneinander behalten je ihr Mass)
+          for _, q in ipairs(keep) do
+            if q.h == it.h and same(it, q) and math.abs(q.pos - it.pos) < math.max(1.5 * MM, 0.02 * math.abs(q.b - q.a)) then dup = true end
+          end
           if not dup then keep[#keep + 1] = it end
         end
         ins = keep
