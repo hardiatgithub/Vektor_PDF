@@ -18,6 +18,11 @@ Neueste Version steht oben.
     (der frühere Zustand „Auto aus + Vectric aus“ wird beim ersten Start zu diesem Haken).
   - Rechts der Knopf **„Auto-Einstellungen ►“** öffnet ein neu geordnetes Menü: eine Zeile je Maßart, „innen“ in einer
     eigenen Spalte, „Einzelmaße ab“ unten abgesetzt. Ausgegraut, wenn die Autobemaßung nicht aktiv ist.
+- **Leeres Feld „Speichern unter“ wird gemerkt:** Wer das Feld leert, bekommt beim Speichern den Windows-Dialog und
+  beim nächsten Aufruf wieder ein leeres Feld (vorher stand dann der im Dialog gewählte Pfad drin). Sobald wieder ein
+  Pfad eingetragen ist, gilt der Vorschlag wie bisher (letzter Ordner + Name der Zeichnung).
+  Der Dialog meldet „Feld leer“ zusätzlich über ein verstecktes Feld, weil VCarve für ein geleertes Feld sonst
+  noch den alten Wert liefern kann.
 - **Behoben: Innenmaße bei gleichen Teilen nur einmal** (Hinweis von Gremlin): Gleich große Teile nebeneinander
   bekamen das Höhenmaß „innen“ nur beim ersten Teil, weil es als doppelt galt. Jetzt zählt ein Innenmaß nur dann als
   doppelt, wenn es auch an derselben Stelle liegt – jedes Teil bekommt seine Breite und Höhe.

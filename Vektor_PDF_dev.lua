@@ -1937,7 +1937,10 @@ function main(script_path)
     local _, last_name = SplitPath(reg:GetString("PdfLast", ""))
     local name = base and (base .. ".pdf") or last_name
     if name == "" then name = T("Zeichnung.pdf", "Drawing.pdf") end
-    dialog:AddTextField("PdfPath", (dir ~= "" and name ~= "") and (dir .. name) or "")
+    local path = (dir ~= "" and name ~= "") and (dir .. name) or ""
+    if reg:GetBool("PdfEmpty", false) then path = "" end   -- Feld war zuletzt leer: leer lassen
+    dialog:AddTextField("PdfPath", path)
+    dialog:AddTextField("PdfAsk", (path == "") and "1" or "0")   -- "1" = Feld ist leer (vom Dialog gesetzt)
   end
 
   dialog:AddTextField("ScrW", "")
@@ -2024,6 +2027,11 @@ function main(script_path)
   local title       = dialog:GetTextField("Title") or ""
   local note        = dialog:GetTextField("Note") or ""
   local pdf_path    = WithPdfExt(dialog:GetTextField("PdfPath") or "")   -- leer = Windows-Dialog
+  -- VCarve liefert fuer ein geleertes Feld u. U. den alten Wert -> der Dialog meldet "leer" eigens
+  local pdf_ask = ""
+  pcall(function() pdf_ask = dialog:GetTextField("PdfAsk") or "" end)
+  if pdf_ask == "1" then pdf_path = "" end
+  reg:SetBool("PdfEmpty", pdf_path == "")                  -- leeres Feld merken (naechstes Mal wieder leer)
 
   reg:SetDouble("LineWidth", line_mm)
   reg:SetDouble("DimLineWidth", dim_line_mm)

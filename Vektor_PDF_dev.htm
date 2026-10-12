@@ -267,7 +267,7 @@
   <span class="t" data-en="Save as:">Speichern unter:</span>
   <span class="hint t" data-en="&nbsp;(empty = ask when exporting)">&nbsp;(leer = beim Export nachfragen)</span>
   <div class="pathrow">
-    <input class="path" type="text" id="PdfPath" onblur="showPathEnd()" title="Vorhandene Datei wird überschrieben" data-title-en="An existing file will be overwritten">
+    <input type="text" id="PdfAsk" style="display:none"><input class="path" type="text" id="PdfPath" onblur="syncPdfAsk(); showPathEnd()" onkeyup="syncPdfAsk()" onchange="syncPdfAsk()" onpaste="setTimeout(syncPdfAsk, 10)" oncut="setTimeout(syncPdfAsk, 10)" title="Vorhandene Datei wird überschrieben" data-title-en="An existing file will be overwritten">
     <input class="LuaButton" id="BrowsePdf" type="button" value="…" title="Ordner und Namen wählen" data-title-en="Choose folder and name">
   </div>
 </fieldset>
@@ -594,7 +594,14 @@ function showPathEnd() {
   if (!e) return;
   try { e.scrollLeft = e.scrollWidth; } catch (x) {}
 }
-function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); syncSlider(); syncAutoMenu(); syncFontWarn(); syncPaper(); applyZoom(false); }
+// Feld "Speichern unter" leer? Eigens melden (VCarve gibt fuer ein geleertes Feld sonst evtl. den alten Wert)
+function syncPdfAsk() {
+  var e = document.getElementById("PdfPath"), a = document.getElementById("PdfAsk");
+  if (!e || !a) return;
+  var v = (e.value || "").replace(/^\s+|\s+$/g, "");
+  a.value = (v == "") ? "1" : "0";
+}
+function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); syncSlider(); syncAutoMenu(); syncFontWarn(); syncPaper(); syncPdfAsk(); applyZoom(false); }
 
 window.onload = function () {
   reportScreen();
