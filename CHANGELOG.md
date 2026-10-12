@@ -18,6 +18,11 @@ Neueste Version steht oben.
     (der frühere Zustand „Auto aus + Vectric aus“ wird beim ersten Start zu diesem Haken).
   - Rechts der Knopf **„Auto-Einstellungen ►“** öffnet ein neu geordnetes Menü: eine Zeile je Maßart, „innen“ in einer
     eigenen Spalte, „Einzelmaße ab“ unten abgesetzt. Ausgegraut, wenn die Autobemaßung nicht aktiv ist.
+- **Gruppen in der Autobemaßung** (Menü Auto-Einstellungen, „Gruppen: auslassen / als Ganzes / einzeln“):
+  bisher wurden gruppierte Vektoren immer ausgelassen – z. B. bei einer Opferplatte mit gruppierten Lochbildern kam
+  gar kein Maß. *auslassen* = wie bisher, *als Ganzes* = Breite und Höhe des Umrisses jeder Gruppe (auch „innen“),
+  *einzeln* = jeder Vektor in der Gruppe wie ein ungruppierter. Verschachtelte Gruppen zählen zur obersten Gruppe.
+  Die Abschlussmeldung weist auf die Einstellung hin, wenn Gruppen ohne Maß bleiben.
 - **Leeres Feld „Speichern unter“ wird gemerkt:** Wer das Feld leert, bekommt beim Speichern den Windows-Dialog und
   beim nächsten Aufruf wieder ein leeres Feld (vorher stand dann der im Dialog gewählte Pfad drin). Sobald wieder ein
   Pfad eingetragen ist, gilt der Vorschlag wie bisher (letzter Ordner + Name der Zeichnung).

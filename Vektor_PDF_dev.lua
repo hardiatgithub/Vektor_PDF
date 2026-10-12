@@ -492,12 +492,13 @@ local function AddObject(obj, contours, in_group, sheet, color)
   end
   local gok, group = pcall(function() return CastCadObjectToCadObjectGroup(obj) end)
   if gok and group ~= nil then
+    local gid = in_group or {}               -- Kennung der obersten Gruppe (gleich fuer alle Kinder)
     local iok = pcall(function()
       local pos = group:GetHeadPosition()
       while pos ~= nil do
         local child
         child, pos = group:GetNext(pos)
-        AddObject(child, contours, true, sheet, color)
+        AddObject(child, contours, gid, sheet, color)
       end
     end)
     if iok then return end
@@ -1912,6 +1913,7 @@ function main(script_path)
   dialog:AddCheckBox("DimOverallIn", reg:GetBool("DimOverallIn", false))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
   dialog:AddCheckBox("DimEachIn", reg:GetBool("DimEachIn", false))
+  dialog:AddRadioGroup("GroupMode", reg:GetInt("GroupMode", 1))   -- Gruppen: 1 auslassen, 2 als Ganzes, 3 einzeln
   dialog:AddCheckBox("DimCircle", reg:GetBool("DimCircle", true))
   dialog:AddCheckBox("DimPoly", reg:GetBool("DimPoly", false))
   AddNum("MinDim", 25)
@@ -2004,6 +2006,8 @@ function main(script_path)
   local overall_in  = dialog:GetCheckBox("DimOverallIn")   -- Gesamtmasse innen (durchs Teil)
   local dim_each    = dialog:GetCheckBox("DimEach")
   local each_in     = dialog:GetCheckBox("DimEachIn")      -- Masse jedes Vektors innen
+  local group_mode  = dialog:GetRadioIndex("GroupMode")    -- 1 auslassen, 2 als Ganzes, 3 einzeln
+  if group_mode ~= 2 and group_mode ~= 3 then group_mode = 1 end
   local dim_circle  = dialog:GetCheckBox("DimCircle")
   local dim_poly    = dialog:GetCheckBox("DimPoly")
   local min_dim_mm  = GetNum("MinDim")
@@ -2056,6 +2060,7 @@ function main(script_path)
   reg:SetBool("DimOverallIn", overall_in)
   reg:SetBool("DimEach", dim_each)
   reg:SetBool("DimEachIn", each_in)
+  reg:SetInt("GroupMode", group_mode)
   reg:SetBool("DimCircle", dim_circle)
   reg:SetBool("DimPoly", dim_poly)
   reg:SetDouble("MinDim", min_dim_mm)
@@ -2143,7 +2148,8 @@ function main(script_path)
     local minx, miny, maxx, maxy = math.huge, math.huge, -math.huge, -math.huge
     for _, c in ipairs(contours) do
       local p = ContourToPath(c.contour, seg_len)
-      p.in_group = c.in_group
+      p.group = c.in_group or nil              -- Kennung der Gruppe (nil = nicht gruppiert)
+      p.in_group = (c.in_group and group_mode ~= 3) and true or false   -- "einzeln": wie ungruppiert
       p.color = c.color
       paths[#paths + 1] = p
       minx = math.min(minx, p.minx); miny = math.min(miny, p.miny)
@@ -2472,6 +2478,47 @@ function main(script_path)
                   vs[#vs + 1] = item(ty(p.miny), ty(p.maxy), tx(p.minx), tx(p.minx) - near, fmt(ph))
                 end
               end
+            end
+          end
+        end
+      end
+      -- Gruppen als Ganzes: Breite und Hoehe des Umrisses jeder Gruppe
+      if dim_each and group_mode == 2 then
+        local tol = in_mm and 0.05 or 0.002
+        local min_dim = in_mm and min_dim_mm or min_dim_mm / 25.4
+        local groups, order = {}, {}
+        for _, p in ipairs(paths) do
+          if p.group then
+            local g = groups[p.group]
+            if not g then
+              g = { list = {}, minx = math.huge, miny = math.huge, maxx = -math.huge, maxy = -math.huge }
+              groups[p.group] = g; order[#order + 1] = g
+            end
+            g.list[#g.list + 1] = p
+            g.minx = math.min(g.minx, p.minx); g.miny = math.min(g.miny, p.miny)
+            g.maxx = math.max(g.maxx, p.maxx); g.maxy = math.max(g.maxy, p.maxy)
+          end
+        end
+        for _, g in ipairs(order) do
+          local pw, ph = g.maxx - g.minx, g.maxy - g.miny
+          local is_total = math.abs(g.minx - vminx) < tol and math.abs(g.maxx - vmaxx) < tol and
+                           math.abs(g.miny - vminy) < tol and math.abs(g.maxy - vmaxy) < tol
+          if math.max(pw, ph) >= min_dim and pw > tol and ph > tol and not (is_total and dim_overall) then
+            local same_w = dim_overall and math.abs(g.minx - vminx) < tol and math.abs(g.maxx - vmaxx) < tol
+            local same_h = dim_overall and math.abs(g.miny - vminy) < tol and math.abs(g.maxy - vmaxy) < tol
+            if each_in then
+              local pair = (not same_w) and (not same_h)
+              if not same_w then
+                local y, lo, hi = InnerPos(g.list, g.miny, g.maxy, true)
+                if y then ins[#ins + 1] = { h = true, a = tx(g.minx), b = tx(g.maxx), pos = ty(y), label = fmt(pw), pair = pair } end
+              end
+              if not same_h then
+                local x, lo, hi = InnerPos(g.list, g.minx, g.maxx, false)
+                if x then ins[#ins + 1] = { h = false, a = ty(g.miny), b = ty(g.maxy), pos = tx(x), label = fmt(ph), pair = pair } end
+              end
+            else
+              if not same_w then hs[#hs + 1] = item(tx(g.minx), tx(g.maxx), ty(g.miny), ty(g.miny) - near, fmt(pw)) end
+              if not same_h then vs[#vs + 1] = item(ty(g.miny), ty(g.maxy), tx(g.minx), tx(g.minx) - near, fmt(ph)) end
             end
           end
         end
@@ -3117,8 +3164,13 @@ function main(script_path)
           n_ang .. T(" Winkelmass(e)", " angle dimension(s)") ..
           (vdim_ok > 0 and (T(" - davon ", " - ") .. vdim_ok .. T(" aus Vectric-Bemassungen", " from Vectric dimensions")) or "")
   end
-  if dim_each then
-    msg = msg .. "\n(" .. n_group .. T(" davon in Gruppen - ohne Einzelmasse)", " of them in groups - no individual dimensions)")
+  if dim_each and n_group > 0 then
+    if group_mode == 2 then
+      msg = msg .. "\n(" .. n_group .. T(" Vektoren in Gruppen - Gruppen als Ganzes bemasst)", " vectors in groups - groups dimensioned as a whole)")
+    else
+      msg = msg .. "\n(" .. n_group .. T(" Vektoren in Gruppen - ohne Masse, siehe Auto-Einstellungen \"Gruppen\")",
+                                          " vectors in groups - not dimensioned, see auto settings \"Groups\")")
+    end
   end
   if vdim_unsure > 0 then
     msg = msg .. "\n\n" .. vdim_unsure ..

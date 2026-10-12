@@ -102,6 +102,7 @@
   table.amtab { border-collapse: collapse; }
   table.amtab td { padding: 0.05em 1.2em 0.05em 0; white-space: nowrap; }
   td.amsub { padding-left: 1.6em !important; }
+  .amgroup { margin-top: 0.3em; }
   .amfoot { margin-top: 0.3em; padding-top: 0.25em; border-top: 1px solid #cfe7e8; }
   .fwarn { color: #b8452a; font-weight: bold; }
   .hidecb { position: absolute; left: -9999px; top: 0; }
@@ -199,6 +200,12 @@
       <tr><td><label><input type="checkbox" id="DimPoly"> <span class="t" data-en="Open polylines: each straight segment">Offene Polylinien: jedes gerade Stück</span></label></td><td></td></tr>
       <tr><td><label><input type="checkbox" id="DimAngle"> <span class="t" data-en="Angles at corners (except 90°)">Winkel an Ecken (ohne 90°)</span></label></td><td></td></tr>
     </table>
+    <div class="amgroup" title="Gruppierte Vektoren (z. B. Schriften in Kurven, Logos, Lochbilder)" data-title-en="Grouped vectors (e.g. text as curves, logos, hole patterns)">
+      <span class="t" data-en="Groups:">Gruppen:</span>&nbsp;
+      <label title="Gruppen bekommen keine Maße" data-title-en="Groups get no dimensions"><input type="radio" name="GroupMode" value="1"> <span class="t" data-en="skip">auslassen</span></label>&nbsp;
+      <label title="Nur Breite und Höhe des Umrisses jeder Gruppe" data-title-en="Only width and height of each group's outline"><input type="radio" name="GroupMode" value="2"> <span class="t" data-en="as a whole">als Ganzes</span></label>&nbsp;
+      <label title="Jeder Vektor in der Gruppe wird bemaßt wie ein einzelner Vektor" data-title-en="Every vector in the group is dimensioned like a single vector"><input type="radio" name="GroupMode" value="3"> <span class="t" data-en="each vector">einzeln</span></label>
+    </div>
     <div class="amfoot"><span class="t" data-en="Single dimensions from:">Einzelmaße ab:</span> <input class="num" type="text" id="MinDim"> mm
     <span class="hint t" data-en="&nbsp;smaller vectors (e.g. letters) get none · 0 = all">&nbsp;kleinere Vektoren (z. B. Buchstaben) ohne Maß · 0 = alle</span></div>
   </div>
