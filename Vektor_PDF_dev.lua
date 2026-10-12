@@ -1863,6 +1863,8 @@ function main(script_path)
   dialog:AddRadioGroup("ScaleMode", reg:GetInt("ScaleMode", 1))
   dialog:AddTextField("ScaleVal", reg:GetString("ScaleVal", "1:5"))
   dialog:AddRadioGroup("Orient", reg:GetInt("Orient", 1))
+  -- Papier: 1 = A4, 2 = US Letter (Standard: Letter bei Zoll-Zeichnungen)
+  dialog:AddRadioGroup("Paper", reg:GetInt("Paper", job.InMM and 1 or 2))
   -- Quelle: 1 = Auswahl, 2 = alle sichtbaren Layer, 3 = gewaehlte Layer (wird gemerkt)
   local src_def = job.Selection.IsEmpty and 2 or 1
   if reg:GetInt("Source", 0) == 3 then src_def = 3 end
@@ -1985,6 +1987,11 @@ function main(script_path)
   local scale_txt   = (dialog:GetTextField("ScaleVal") or ""):gsub("^%s+", ""):gsub("%s+$", "")
   local scale_factor = ParseScale(scale_txt)                 -- Papier / Zeichnung, z. B. 0.2 bei 1:5
   local orient      = dialog:GetRadioIndex("Orient")         -- 1 = automatisch, 2 = hoch, 3 = quer
+  local paper       = dialog:GetRadioIndex("Paper")          -- 1 = A4, 2 = US Letter
+  if paper ~= 2 then paper = 1 end
+  local PAPER_W, PAPER_H = 595.28, 841.89                    -- Hochformat in pt
+  if paper == 2 then PAPER_W, PAPER_H = 612, 792 end         -- 8,5 x 11 Zoll
+  local pname = (paper == 2) and "Letter" or "A4"
   local source      = dialog:GetRadioIndex("Source")
   local selected_only = source == 1
   local layer_sel   = dialog:GetTextField("LayerSel") or ""
@@ -2034,6 +2041,7 @@ function main(script_path)
     return false
   end
   reg:SetInt("Orient", orient)
+  reg:SetInt("Paper", paper)
   reg:SetInt("SheetMode", sheet_mode)
   reg:SetBool("DrawBorder", draw_border)
   reg:SetBool("DimOverall", dim_overall)
@@ -2145,7 +2153,7 @@ function main(script_path)
       elseif scale_mode == 3 then s0 = unit_pt * scale_factor
       else
         local w0, h0 = math.max(vmaxx - vminx, 1e-9), math.max(vmaxy - vminy, 1e-9)
-        local pw, ph = 841.89, 595.28
+        local pw, ph = PAPER_H, PAPER_W
         if not ((orient == 3) or (orient ~= 2 and w0 > h0)) then pw, ph = ph, pw end
         s0 = math.min((pw - 2 * margin_mm * MM - 20 * MM) / w0, (ph - 2 * margin_mm * MM - 30 * MM) / h0)
       end
@@ -2252,7 +2260,7 @@ function main(script_path)
           local aw, ah = room(pw, ph)
           return w * scale <= aw + 0.01 and h * scale <= ah + 0.01
         end
-        local P, L = { 595.28, 841.89 }, { 841.89, 595.28 }
+        local P, L = { PAPER_W, PAPER_H }, { PAPER_H, PAPER_W }
         local first = ((orient == 3) or (orient ~= 2 and w > h)) and L or P
         local other = (first == L) and P or L
         local pick = first
@@ -2269,7 +2277,7 @@ function main(script_path)
           too_big = (best > 0) and NormScaleFor(unit_pt / best) or nil
         end
       else
-        page_w, page_h = 595.28, 841.89
+        page_w, page_h = PAPER_W, PAPER_H
         local landscape = (orient == 3) or (orient ~= 2 and w > h)
         if landscape then page_w, page_h = page_h, page_w end
         scale = math.min((page_w - 2 * margin - res - rres) / w,
@@ -2616,12 +2624,12 @@ function main(script_path)
     end
     if scale_mode == 3 and too_big ~= nil then
       local nm = string.format("%g", too_big):gsub("%.", lang == 2 and "." or ",")
-      DisplayMessageBox(T("Die Zeichnung passt im Massstab " .. scale_txt .. " nicht auf A4.\n\n" ..
+      DisplayMessageBox(T("Die Zeichnung passt im Massstab " .. scale_txt .. " nicht auf " .. pname .. ".\n\n" ..
                           "Kleinster passender Normmassstab: 1:" .. nm ..
-                          "\n(oder \"Auf A4 einpassen\" waehlen)",
-                          "The drawing does not fit on A4 at scale " .. scale_txt .. ".\n\n" ..
+                          "\n(oder \"Einpassen\" waehlen)",
+                          "The drawing does not fit on " .. pname .. " at scale " .. scale_txt .. ".\n\n" ..
                           "Smallest standard scale that fits: 1:" .. nm ..
-                          "\n(or choose \"Fit to A4\")"))
+                          "\n(or choose \"Fit to page\")"))
       return false
     end
 

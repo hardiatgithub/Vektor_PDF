@@ -18,6 +18,9 @@ Neueste Version steht oben.
     (der frühere Zustand „Auto aus + Vectric aus“ wird beim ersten Start zu diesem Haken).
   - Rechts der Knopf **„Auto-Einstellungen ►“** öffnet ein neu geordnetes Menü: eine Zeile je Maßart, „innen“ in einer
     eigenen Spalte, „Einzelmaße ab“ unten abgesetzt. Ausgegraut, wenn die Autobemaßung nicht aktiv ist.
+- **Papierformat US Letter** (Bereich „Seite“, „Papier: A4 / Letter“): 8,5 × 11 Zoll für „Einpassen“ und festen
+  Maßstab. Bei Zoll-Zeichnungen ist Letter voreingestellt, die Wahl wird gemerkt. Beschriftungen und Meldungen
+  nennen das gewählte Format („Auf Letter einpassen“, „passt nicht auf Letter“).
 - **Behoben: Radius am Kreis fehlte**, wenn die Vectric-Radiuslinie senkrecht oder waagrecht vom Mittelpunkt
   läuft und die Zahl daneben steht (Pfeilspitze mitten auf der Rahmenkante statt in einer Ecke).
 - **Hinweis bei großer Schrift auf A4:** Schriftgröße über 10 mm bei „Auf A4 einpassen“ oder festem Maßstab zeigt

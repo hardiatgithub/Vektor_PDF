@@ -217,7 +217,7 @@
       <span class="hint t" data-en="&nbsp;length of arrow heads (default 2.5)">&nbsp;Länge der Pfeilspitzen (Standard 2,5)</span></td></tr>
     <tr><td><span class="t" data-en="Font size:">Schriftgröße:</span></td>
       <td><input class="num" type="text" id="FontSize"> mm
-      <span id="FontWarn" class="fwarn" style="display:none"><span class="t" data-en="&nbsp;large for A4 – drawing gets small">&nbsp;groß für A4 – Zeichnung wird klein</span></span></td></tr>
+      <span id="FontWarn" class="fwarn" style="display:none"><span class="t" data-en="&nbsp;large for <span class=&quot;pname&quot;>A4</span> – drawing gets small">&nbsp;groß für <span class="pname">A4</span> – Zeichnung wird klein</span></span></td></tr>
     <tr><td></td>
       <td><label><input type="checkbox" id="DimAutoSize"> <span class="t" data-en="Scale with drawing:">Mit Maßstab skalieren:</span></label>
         <input class="num" type="text" id="DimModelSize" style="width:3.5em"> <span class="t" data-en="mm in drawing, min.">mm in der Zeichnung, min.</span>
@@ -238,18 +238,21 @@
 
 <fieldset class="s-page">
   <legend><span class="t" data-en="Page">Seite</span></legend>
-  <label><input type="radio" name="ScaleMode" value="1"> <span class="t" data-en="Fit to A4">Auf A4 einpassen</span></label>&nbsp;&nbsp;
+  <label><input type="radio" name="ScaleMode" value="1"> <span class="t" data-en="Fit to <span class=&quot;pname&quot;>A4</span>">Auf <span class="pname">A4</span> einpassen</span></label>&nbsp;&nbsp;
   <label><input type="radio" name="ScaleMode" value="2"> <span class="t" data-en="Scale 1:1">Maßstab 1:1</span></label>&nbsp;&nbsp;
   <label><input type="radio" name="ScaleMode" value="3"> <span class="t" data-en="Scale:">Maßstab:</span></label>
   <input class="num" type="text" id="ScaleVal" style="width:4.5em; text-align:center" onfocus="pickScale3()"
-         title="z. B. 1:5, 1:7,5 oder 2:1 – auf A4" data-title-en="e.g. 1:5, 1:7.5 or 2:1 – on A4">
+         title="z. B. 1:5, 1:7,5 oder 2:1 – auf dem Blatt (A4/Letter)" data-title-en="e.g. 1:5, 1:7.5 or 2:1 – on the sheet (A4/Letter)">
   <select id="ScalePick" style="width:2.6em" onchange="onScalePick(this)" title="Normmaßstäbe" data-title-en="Standard scales">
     <option value="">▾</option>
     <option>1:2</option><option>1:2,5</option><option>1:5</option><option>1:10</option>
     <option>1:20</option><option>1:25</option><option>1:50</option><option>1:100</option>
     <option>2:1</option><option>5:1</option>
   </select>
-  <br><span class="t" data-en="A4 orientation:">A4-Ausrichtung:</span>&nbsp;
+  <br><span class="t" data-en="Paper:">Papier:</span>&nbsp;
+  <label><input type="radio" name="Paper" value="1" onclick="syncAll()"> A4</label>&nbsp;
+  <label title="US Letter 8,5 × 11 Zoll (216 × 279 mm)" data-title-en="US Letter 8.5 × 11 in (216 × 279 mm)"><input type="radio" name="Paper" value="2" onclick="syncAll()"> Letter</label>
+  <br><span class="t" data-en="Orientation:">Ausrichtung:</span>&nbsp;
   <label><input type="radio" name="Orient" value="1"> <span class="t" data-en="Automatic">Automatisch</span></label>&nbsp;
   <label><input type="radio" name="Orient" value="2"> <span class="t" data-en="Portrait">Hochformat</span></label>&nbsp;
   <label><input type="radio" name="Orient" value="3"> <span class="t" data-en="Landscape">Querformat</span></label>
@@ -561,6 +564,15 @@ function dslDown(e) {
   document.onmouseup = function () { dslDrag = false; document.onmousemove = null; document.onmouseup = null; };
   return false;
 }
+// Papiername (A4 / Letter) in die Beschriftungen einsetzen (nach syncLang!)
+function syncPaper() {
+  var r = document.getElementsByName("Paper"), nm = "A4";
+  for (var i = 0; i < r.length; i++) { if (r[i].checked && r[i].value == "2") nm = "Letter"; }
+  var sp = document.getElementsByTagName("span");
+  for (var j = 0; j < sp.length; j++) {
+    if (sp[j].className == "pname" && sp[j].innerHTML != nm) sp[j].innerHTML = nm;
+  }
+}
 // Hinweis bei grosser Schrift auf A4 (bei 1:1 ist eine grosse Schrift normal)
 function syncFontWarn() {
   var f = document.getElementById("FontSize"), w = document.getElementById("FontWarn");
@@ -582,7 +594,7 @@ function showPathEnd() {
   if (!e) return;
   try { e.scrollLeft = e.scrollWidth; } catch (x) {}
 }
-function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); syncSlider(); syncAutoMenu(); syncFontWarn(); applyZoom(false); }
+function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); syncSlider(); syncAutoMenu(); syncFontWarn(); syncPaper(); applyZoom(false); }
 
 window.onload = function () {
   reportScreen();
