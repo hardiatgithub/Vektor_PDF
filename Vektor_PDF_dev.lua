@@ -1253,11 +1253,19 @@ end
 function Draw:narrow(len, label)
   return len < 2 * self.arrow + TextWidth(label, self.fs) + 2 * MM
 end
-function Draw:hdim(xa, xb, yref, yline, label, inner)
+-- brk: Hilfslinie unterbrechen (kurzes Stueck am Teil, dann erst ab dieser Kante bis zur Masslinie)
+function Draw:hdim(xa, xb, yref, yline, label, inner, brk)
   local gap, over = EXT_GAP, 1.5 * MM
   if not inner then                                -- Innenmass: keine Masshilfslinien
-    self:line(xa, yref - gap, xa, yline - over)
-    self:line(xb, yref - gap, xb, yline - over)
+    if brk and brk < yref - gap - 5 * MM then
+      for _, x in ipairs({ xa, xb }) do
+        self:line(x, yref - gap, x, yref - gap - 3 * MM)
+        self:line(x, brk - gap, x, yline - over)
+      end
+    else
+      self:line(xa, yref - gap, xa, yline - over)
+      self:line(xb, yref - gap, xb, yline - over)
+    end
   end
   if self:narrow(xb - xa, label) then
     local e = self.arrow + 2 * MM
@@ -1596,11 +1604,18 @@ function Draw:radius(cx, cy, px, py, label, sa, sw)
   self:text(best.tx, best.ty, label, nil, false, best.align)
 end
 -- senkrechtes Mass: von ya bis yb, Bezugskante xref, Masslinie bei xline (links)
-function Draw:vdim(ya, yb, xref, xline, label, inner)
+function Draw:vdim(ya, yb, xref, xline, label, inner, brk)
   local gap, over = EXT_GAP, 1.5 * MM
   if not inner then                                -- Innenmass: keine Masshilfslinien
-    self:line(xref - gap, ya, xline - over, ya)
-    self:line(xref - gap, yb, xline - over, yb)
+    if brk and brk < xref - gap - 5 * MM then
+      for _, y in ipairs({ ya, yb }) do
+        self:line(xref - gap, y, xref - gap - 3 * MM, y)
+        self:line(brk - gap, y, xline - over, y)
+      end
+    else
+      self:line(xref - gap, ya, xline - over, ya)
+      self:line(xref - gap, yb, xline - over, yb)
+    end
   end
   if self:narrow(yb - ya, label) then
     local e = self.arrow + 2 * MM
@@ -1914,6 +1929,7 @@ function main(script_path)
   dialog:AddCheckBox("DimOverallIn", reg:GetBool("DimOverallIn", false))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
   dialog:AddCheckBox("DimEachIn", reg:GetBool("DimEachIn", false))
+  dialog:AddCheckBox("DimEachOut", reg:GetBool("DimEachOut", false))   -- Einzelmasse ausserhalb (vorne/links)
   dialog:AddRadioGroup("GroupMode", reg:GetInt("GroupMode", 1))   -- Gruppen: 1 auslassen, 2 als Ganzes, 3 einzeln
   dialog:AddCheckBox("DimCircle", reg:GetBool("DimCircle", true))
   dialog:AddCheckBox("DimPoly", reg:GetBool("DimPoly", false))
@@ -2012,6 +2028,7 @@ function main(script_path)
   local overall_in  = dialog:GetCheckBox("DimOverallIn")   -- Gesamtmasse innen (durchs Teil)
   local dim_each    = dialog:GetCheckBox("DimEach")
   local each_in     = dialog:GetCheckBox("DimEachIn")      -- Masse jedes Vektors innen
+  local each_out    = dialog:GetCheckBox("DimEachOut") and not each_in   -- ausserhalb der Zeichnung, vorne/links
   local group_mode  = dialog:GetRadioIndex("GroupMode")    -- 1 auslassen, 2 als Ganzes, 3 einzeln
   if group_mode ~= 2 and group_mode ~= 3 then group_mode = 1 end
   local dim_circle  = dialog:GetCheckBox("DimCircle")
@@ -2073,6 +2090,7 @@ function main(script_path)
   reg:SetBool("DimOverallIn", overall_in)
   reg:SetBool("DimEach", dim_each)
   reg:SetBool("DimEachIn", each_in)
+  reg:SetBool("DimEachOut", each_out)
   reg:SetInt("GroupMode", group_mode)
   reg:SetBool("DimCircle", dim_circle)
   reg:SetBool("DimPoly", dim_poly)
@@ -2488,11 +2506,16 @@ function main(script_path)
                   if x then ins[#ins + 1] = { h = false, a = ty(lo), b = ty(hi), pos = tx(x), label = fmt(hi - lo), pair = pair } end
                 end
               else
+                -- ausserhalb: Masslinie vor (unter) bzw. links neben der ganzen Zeichnung, Hilfslinien vom Teil
+                local ly = each_out and ty(vminy) or ty(p.miny)
+                local lx = each_out and tx(vminx) or tx(p.minx)
                 if not same_w then
-                  hs[#hs + 1] = item(tx(p.minx), tx(p.maxx), ty(p.miny), ty(p.miny) - near, fmt(pw))
+                  hs[#hs + 1] = item(tx(p.minx), tx(p.maxx), ty(p.miny), ly - near, fmt(pw))
+                  if each_out then hs[#hs].brk = ty(vminy) end     -- Hilfslinie unterbrochen
                 end
                 if not same_h then
-                  vs[#vs + 1] = item(ty(p.miny), ty(p.maxy), tx(p.minx), tx(p.minx) - near, fmt(ph))
+                  vs[#vs + 1] = item(ty(p.miny), ty(p.maxy), tx(p.minx), lx - near, fmt(ph))
+                  if each_out then vs[#vs].brk = tx(vminx) end
                 end
               end
             end
@@ -2534,8 +2557,16 @@ function main(script_path)
                 if x then ins[#ins + 1] = { h = false, a = ty(g.miny), b = ty(g.maxy), pos = tx(x), label = fmt(ph), pair = pair } end
               end
             else
-              if not same_w then hs[#hs + 1] = item(tx(g.minx), tx(g.maxx), ty(g.miny), ty(g.miny) - near, fmt(pw)) end
-              if not same_h then vs[#vs + 1] = item(ty(g.miny), ty(g.maxy), tx(g.minx), tx(g.minx) - near, fmt(ph)) end
+              local ly = each_out and ty(vminy) or ty(g.miny)
+              local lx = each_out and tx(vminx) or tx(g.minx)
+              if not same_w then
+                hs[#hs + 1] = item(tx(g.minx), tx(g.maxx), ty(g.miny), ly - near, fmt(pw))
+                if each_out then hs[#hs].brk = ty(vminy) end
+              end
+              if not same_h then
+                vs[#vs + 1] = item(ty(g.miny), ty(g.maxy), tx(g.minx), lx - near, fmt(ph))
+                if each_out then vs[#vs].brk = tx(vminx) end
+              end
             end
           end
         end
@@ -2795,8 +2826,8 @@ function main(script_path)
     d.arrow = d.arrow * dim_k                 -- Pfeile wachsen/schrumpfen mit der Bemassung
     d.inline = text_inline
     d:add("q " .. f(dim_line_mm * MM) .. " w " .. ColorOps(dim_color))
-    for _, it in ipairs(hdims) do d:hdim(it.a, it.b, it.ref, it.line, it.label) end
-    for _, it in ipairs(vdims) do d:vdim(it.a, it.b, it.ref, it.line, it.label) end
+    for _, it in ipairs(hdims) do d:hdim(it.a, it.b, it.ref, it.line, it.label, nil, it.brk) end
+    for _, it in ipairs(vdims) do d:vdim(it.a, it.b, it.ref, it.line, it.label, nil, it.brk) end
     -- Kreise: Radius mit Pfeil von aussen (schraeg rechts oben, weicht bei Bedarf entlang des Kreises aus)
     for _, c in ipairs(cdims) do
       local a0 = math.pi / 4
@@ -2835,12 +2866,22 @@ function main(script_path)
         end
         if #items > 1 and math.abs(items[2].pos - items[1].pos) < 0.01 then table.remove(items, 1) end
         local edge = horiz and odims.ax or odims.ay
+        -- Hilfslinie vom Punkt bis 'to', unterbrochen: kurzes Stueck am Loch/an der Linie, dann erst ab dem Umriss
+        local rim = horiz and (ty(vminy) - gap) or (tx(vminx) - gap)
+        local function ext(it, to)
+          local from = it.from or rim
+          if it.from and it.from - 5 * MM > rim then
+            if horiz then
+              d:line(it.pos, from, it.pos, from - 3 * MM); d:line(it.pos, rim, it.pos, to)
+            else
+              d:line(from, it.pos, from - 3 * MM, it.pos); d:line(rim, it.pos, to, it.pos)
+            end
+          elseif horiz then d:line(it.pos, from, it.pos, to)
+          else d:line(from, it.pos, to, it.pos) end
+        end
         if row_mode == 3 then
           -- Kettenmass: Hilfslinien bis zur Masslinie, dann Mass von Punkt zu Punkt
-          for _, it in ipairs(items) do
-            local from = it.from or (horiz and (ty(vminy) - gap) or (tx(vminx) - gap))
-            if horiz then d:line(it.pos, from, it.pos, edge - 1 * MM) else d:line(from, it.pos, edge - 1 * MM, it.pos) end
-          end
+          for _, it in ipairs(items) do ext(it, edge - 1 * MM) end
           for i = 1, #items - 1 do
             local a, b = items[i], items[i + 1]
             local lab = fmt(b.v - a.v)
@@ -2854,11 +2895,11 @@ function main(script_path)
         end
         for _, it in ipairs(items) do
           if horiz then
-            if it.from then d:line(it.pos, it.from, it.pos, edge) else d:line(it.pos, ty(vminy) - gap, it.pos, edge) end
+            ext(it, edge)
             d:line(it.pos, edge, it.t, edge - 1.5 * MM)
             d:text(it.t + 0.35 * fs, edge - 2 * MM, it.lab, fs, true, "right")
           else
-            if it.from then d:line(it.from, it.pos, edge, it.pos) else d:line(tx(vminx) - gap, it.pos, edge, it.pos) end
+            ext(it, edge)
             d:line(edge, it.pos, edge - 1.5 * MM, it.t)
             d:text(edge - 2 * MM, it.t - 0.35 * fs, it.lab, fs, false, "right")
           end

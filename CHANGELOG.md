@@ -19,6 +19,11 @@ Neueste Version steht oben.
     (der frühere Zustand „Auto aus + Vectric aus“ wird beim ersten Start zu diesem Haken).
   - Rechts der Knopf **„Auto-Einstellungen ►“** öffnet ein neu geordnetes Menü: eine Zeile je Maßart, „innen“ in einer
     eigenen Spalte, „Einzelmaße ab“ unten abgesetzt. Ausgegraut, wenn die Autobemaßung nicht aktiv ist.
+- **Einzelmaße außen** (Menü Auto-Einstellungen, „Jeder Vektor“ → *außen*): alle Einzelmaße außerhalb der ganzen
+  Zeichnung – Breiten vorne (unten), Höhen links, mit Hilfslinien vom jeweiligen Teil; mehrere Maße stapeln sich
+  in eigenen Spuren, das Gesamtmaß liegt ganz außen. Schließt sich mit *innen* aus. Gilt auch für Gruppen „als Ganzes“.
+  Die Hilfslinien sind unterbrochen: kurzes Stück am Teil, dann erst wieder ab dem Umriss bis zur Maßlinie –
+  so laufen keine Linien quer durch den Korpus.
 - **Reihenbemaßung der Lochmitten** (Bereich „Bemaßung“, eigener Schalter „Reihenbemaßung: aus / steigend / Kette“,
   unabhängig von der Autobemaßung): bemaßt die Mitten aller Kreise ab der linken unteren Ecke der Zeichnung – X-Werte
   unter, Y-Werte links neben der Zeichnung, außerhalb der übrigen Maße. *steigend* = alle Werte ab 0 (0, 37, 69 …),
@@ -29,6 +34,7 @@ Neueste Version steht oben.
   waagrechte → Y-Wert, z. B. Rasterlinien einer Opferplatte); *beide* = Löcher und Linien auf derselben Maßlinie.
   Bedienung wie die Bemaßung: links Haken „Reihenbemaßung“ (an/aus), Schieberegler *Löcher · beide · Linien*,
   rechts *steigend / Kette*. Regler oder Art anklicken schaltet den Haken mit ein; frühere Einstellung wird übernommen.
+  Hilfslinien unterbrochen wie bei „außen“: kurzes Stück am Loch bzw. an der Linie, dann erst wieder ab dem Umriss.
 - **Gruppen in der Autobemaßung** (Menü Auto-Einstellungen, „Gruppen: auslassen / als Ganzes / einzeln“):
   bisher wurden gruppierte Vektoren immer ausgelassen – z. B. bei einer Opferplatte mit gruppierten Lochbildern kam
   gar kein Maß. *auslassen* = wie bisher, *als Ganzes* = Breite und Höhe des Umrisses jeder Gruppe (auch „innen“),

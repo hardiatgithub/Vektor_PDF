@@ -213,7 +213,8 @@
       <tr><td><label><input type="checkbox" id="DimOverall"> <span class="t" data-en="Overall size (width × height)">Gesamtmaße (Breite × Höhe)</span></label></td>
           <td><label title="Breite und Höhe innerhalb des Umrisses statt außen daneben (nur bei einem einzelnen Bauteil)" data-title-en="Width and height drawn inside the outline instead of outside (single part only)"><input type="checkbox" id="DimOverallIn"> <span class="t" data-en="inside">innen</span></label></td></tr>
       <tr><td><label><input type="checkbox" id="DimEach"> <span class="t" data-en="Each vector (single lines as length)">Jeder Vektor (Einzellinien als Länge)</span></label></td>
-          <td><label title="Maße jedes Vektors innerhalb der Kontur statt außen – spart Platz, keine Hilfslinien" data-title-en="Each vector's dimensions drawn inside the contour instead of outside – saves space, no extension lines"><input type="checkbox" id="DimEachIn"> <span class="t" data-en="inside">innen</span></label></td></tr>
+          <td><label title="Maße jedes Vektors innerhalb der Kontur statt außen – spart Platz, keine Hilfslinien" data-title-en="Each vector's dimensions drawn inside the contour instead of outside – saves space, no extension lines"><input type="checkbox" id="DimEachIn" onclick="eachSide(this)"> <span class="t" data-en="inside">innen</span></label>
+              <label title="Alle Einzelmaße außerhalb der ganzen Zeichnung: Breiten vorne (unten), Höhen links – mit Hilfslinien vom Teil" data-title-en="All single dimensions outside the whole drawing: widths at the front (bottom), heights on the left – with extension lines from the part"><input type="checkbox" id="DimEachOut" onclick="eachSide(this)"> <span class="t" data-en="outside">außen</span></label></td></tr>
       <tr><td><label><input type="checkbox" id="DimRadius"> <span class="t" data-en="Radii on arcs (R …)">Radien an Bögen (R …)</span></label></td>
           <td><label title="Radiuslinie vom Mittelpunkt zum Bogen (wie Vectric) statt Pfeil von außen" data-title-en="Radius line from the centre to the arc (like Vectric) instead of an arrow from outside"><input type="checkbox" id="DimRadiusIn"> <span class="t" data-en="inside">innen</span></label></td></tr>
       <tr><td class="amsub"><label><input type="checkbox" id="DimRadiusOnce"> <span class="t" data-en="equal radii only once per vector">gleiche Radien nur einmal je Vektor</span></label></td><td></td></tr>
@@ -656,6 +657,11 @@ function rslDown(e) {
   document.onmousemove = function (ev) { ev = ev || window.event; if (rslDrag) rslFromX(ev.clientX); return false; };
   document.onmouseup = function () { rslDrag = false; document.onmousemove = null; document.onmouseup = null; };
   return false;
+}
+// "innen" und "aussen" bei Einzelmassen schliessen sich aus
+function eachSide(cb) {
+  var other = document.getElementById(cb.id == "DimEachIn" ? "DimEachOut" : "DimEachIn");
+  if (cb.checked && other) other.checked = false;
 }
 function syncAutoMenu() {
   var cb = document.getElementById("DimAuto"), m = document.getElementById("AutoMenu"), h = document.getElementById("DimOn");
