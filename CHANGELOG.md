@@ -14,10 +14,21 @@ Neueste Version steht oben.
 ### Neu (nach beta.4)
 - **Bemaßungs-Regler** (Bereich „Bemaßung“): ein Schieber mit drei Stufen *Vectric · beide · Auto* ersetzt die Haken
   „Autobemaßung“ und „Vectric-Bemaßung aus“ (ziehen oder auf die Stufe klicken).
-  - Links daneben **„Bemaßung ausblenden“**: gar keine Maße ins PDF, die Regler-Stellung bleibt gemerkt
+  - Links daneben Haken **„Bemaßung“** (an/aus, wie bei der Reihenbemaßung; früher „Bemaßung ausblenden“): aus = keine
+    Vectric-/Autobemaßung im PDF, die Regler-Stellung bleibt gemerkt
     (der frühere Zustand „Auto aus + Vectric aus“ wird beim ersten Start zu diesem Haken).
   - Rechts der Knopf **„Auto-Einstellungen ►“** öffnet ein neu geordnetes Menü: eine Zeile je Maßart, „innen“ in einer
     eigenen Spalte, „Einzelmaße ab“ unten abgesetzt. Ausgegraut, wenn die Autobemaßung nicht aktiv ist.
+- **Reihenbemaßung der Lochmitten** (Bereich „Bemaßung“, eigener Schalter „Reihenbemaßung: aus / steigend / Kette“,
+  unabhängig von der Autobemaßung): bemaßt die Mitten aller Kreise ab der linken unteren Ecke der Zeichnung – X-Werte
+  unter, Y-Werte links neben der Zeichnung, außerhalb der übrigen Maße. *steigend* = alle Werte ab 0 (0, 37, 69 …),
+  zu dicht liegende Zahlen werden mit kleinem Knick versetzt; *Kette* = Abstände von Loch zu Loch auf einer
+  Maßlinie. Kreise in Gruppen (Lochbilder) zählen mit. Unabhängig von „Bemaßung ausblenden“ – allein oder
+  zusammen mit Vectric-/Autobemaßung nutzbar.
+  Bezug wählbar „für: Löcher / Linien / beide“ – *Linien* = Lage gerader offener Linien (senkrechte → X-Wert,
+  waagrechte → Y-Wert, z. B. Rasterlinien einer Opferplatte); *beide* = Löcher und Linien auf derselben Maßlinie.
+  Bedienung wie die Bemaßung: links Haken „Reihenbemaßung“ (an/aus), Schieberegler *Löcher · beide · Linien*,
+  rechts *steigend / Kette*. Regler oder Art anklicken schaltet den Haken mit ein; frühere Einstellung wird übernommen.
 - **Gruppen in der Autobemaßung** (Menü Auto-Einstellungen, „Gruppen: auslassen / als Ganzes / einzeln“):
   bisher wurden gruppierte Vektoren immer ausgelassen – z. B. bei einer Opferplatte mit gruppierten Lochbildern kam
   gar kein Maß. *auslassen* = wie bisher, *als Ganzes* = Breite und Höhe des Umrisses jeder Gruppe (auch „innen“),

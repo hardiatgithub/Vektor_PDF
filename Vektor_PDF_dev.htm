@@ -88,7 +88,7 @@
   input[type=text]:focus { border-color: #2b84c6; background: #fff; outline: none; }
   h2 input.ver, h2 input.ver:focus { border: 0; background: transparent; color: #cfe3f5; }
   input.off { background: #e4e4e4; color: #999; border-color: #ccc; }
-  td.dhide { white-space: nowrap; padding-top: 0.25em; }
+  td.dhide { white-space: nowrap; padding-top: 0.25em; width: 10.5em; }
   td.dset { white-space: nowrap; padding-top: 0.1em; }
   .abtn { display: inline-block; text-decoration: none; color: #1f5f60; background: #eef8f8;
           border: 1px solid #9fd3d5; border-radius: 4px; padding: 0.1em 0.5em; }
@@ -103,6 +103,8 @@
   table.amtab td { padding: 0.05em 1.2em 0.05em 0; white-space: nowrap; }
   td.amsub { padding-left: 1.6em !important; }
   .amgroup { margin-top: 0.3em; }
+  .rowdim { margin: 0 0 0.3em 0; }
+  td.dset label { white-space: nowrap; }
   .amfoot { margin-top: 0.3em; padding-top: 0.25em; border-top: 1px solid #cfe7e8; }
   .fwarn { color: #b8452a; font-weight: bold; }
   .hidecb { position: absolute; left: -9999px; top: 0; }
@@ -173,7 +175,7 @@
   <div class="dimbtns">
     <span class="hidecb"><input type="checkbox" id="DimAuto"><input type="checkbox" id="VDimOff"></span>
     <table class="dsl"><tr>
-      <td class="dhide"><label title="Keine Bemaßung ins PDF (Regler bleibt gemerkt)" data-title-en="No dimensions in the PDF (slider setting is kept)"><input type="checkbox" id="DimHide" onclick="syncAll()"> <span class="t" data-en="Hide dimensions">Bemaßung ausblenden</span></label></td>
+      <td class="dhide"><label title="Vectric- und Autobemaßung ins PDF (aus: Regler bleibt gemerkt) – die Reihenbemaßung schaltest du extra" data-title-en="Vectric and auto dimensions in the PDF (off: slider setting is kept) – row dimensions have their own switch"><input type="checkbox" id="DimOn" onclick="syncAll()"> <span class="t" data-en="Dimensions">Bemaßung</span></label></td>
       <td class="dmid" id="DimMid">
         <div id="DimTrack" class="dtrack" onmousedown="dslDown(event)" title="Welche Bemaßung ins PDF? Schieben oder klicken" data-title-en="Which dimensions go into the PDF? Drag or click">
           <div id="DimFill" class="dfill"></div><span id="DimKnob" class="dknob"></span></div>
@@ -184,6 +186,25 @@
         </tr></table>
       </td>
       <td class="dset"><a href="#" id="AutoBtn" class="abtn" onclick="toggleAutoMenu(); return false;" title="Was die Autobemaßung bemaßt" data-title-en="What auto dimensioning measures"><span class="t" data-en="Auto settings">Auto-Einstellungen</span> <span id="AutoArrow">&#9658;</span></a></td>
+    </tr></table>
+  </div>
+  <div class="rowdim">
+    <span class="hidecb"><input type="radio" name="RowRef" value="1"><input type="radio" name="RowRef" value="2"><input type="radio" name="RowRef" value="3"></span>
+    <table class="dsl" id="RowTab"><tr>
+      <td class="dhide"><label title="Gemessen ab der linken unteren Ecke: X unten, Y links – eigener Schalter, unabhängig von der Autobemaßung" data-title-en="Measured from the lower left corner: X below, Y on the left – own switch, independent of auto dimensions"><input type="checkbox" id="RowOn" onclick="syncAll()"> <span class="t" data-en="Row dimensions">Reihenbemaßung</span></label></td>
+      <td class="dmid">
+        <div id="RowTrack" class="dtrack" onmousedown="rslDown(event)" title="Was in die Reihe kommt – schieben oder klicken" data-title-en="What goes into the row – drag or click">
+          <div id="RowFill" class="dfill"></div><span id="RowKnob" class="dknob"></span></div>
+        <table class="dstops"><tr>
+          <td id="RStop0" class="dstop" style="text-align:left" onclick="rslSet(0)" title="Mitten aller Kreise (Bohrungen)" data-title-en="Centres of all circles (holes)"><span class="t" data-en="Holes">Löcher</span></td>
+          <td id="RStop1" class="dstop" style="text-align:center" onclick="rslSet(1)" title="Löcher und Linien auf derselben Maßlinie" data-title-en="Holes and lines on the same dimension line"><span class="t" data-en="both">beide</span></td>
+          <td id="RStop2" class="dstop" style="text-align:right" onclick="rslSet(2)" title="Lage gerader Linien: senkrechte → X, waagrechte → Y (z. B. Rasterlinien)" data-title-en="Position of straight lines: vertical → X, horizontal → Y (e.g. grid lines)"><span class="t" data-en="Lines">Linien</span></td>
+        </tr></table>
+      </td>
+      <td class="dset">
+        <label title="Alle Werte ab 0: 0, 32, 64 …" data-title-en="All values from 0: 0, 32, 64 …"><input type="radio" name="RowType" value="1" onclick="rslOn()"> <span class="t" data-en="running">steigend</span></label><br>
+        <label title="Abstände von Punkt zu Punkt auf einer Maßlinie" data-title-en="Distances from point to point on one dimension line"><input type="radio" name="RowType" value="2" onclick="rslOn()"> <span class="t" data-en="chain">Kette</span></label>
+      </td>
     </tr></table>
   </div>
   <div id="AutoMenu" class="automenu" style="display:none">
@@ -531,8 +552,8 @@ function dslSet(pos) {
   if (!a || !v) return;
   a.checked = (pos >= 1);
   v.checked = (pos == 2);
-  var h = document.getElementById("DimHide");
-  if (h) h.checked = false;                          // Regler bedient -> Bemassung wieder an
+  var h = document.getElementById("DimOn");
+  if (h) h.checked = true;                           // Regler bedient -> Bemassung wieder an
   syncSlider(); syncAutoMenu();
 }
 function syncSlider() {
@@ -546,7 +567,7 @@ function syncSlider() {
     var e = document.getElementById("DStop" + i);
     if (e) e.className = (i == pos) ? "dstop on" : "dstop";
   }
-  var h = document.getElementById("DimHide"), hid = (h && h.checked);
+  var h = document.getElementById("DimOn"), hid = (h && !h.checked);
   var tb = document.getElementById("DimTrack");
   var tab = tb ? tb.parentNode.parentNode.parentNode.parentNode : null;   // table.dsl
   if (tab) tab.className = hid ? "dsl dim" : "dsl";
@@ -590,9 +611,55 @@ function syncFontWarn() {
   var show = (mode != "2" && !isNaN(v) && v > 10);
   w.style.display = show ? "inline" : "none";
 }
+// Regler der Reihenbemassung: 0 = Loecher, 1 = beide, 2 = Linien (gespeichert in RowRef: 1 Loecher, 3 beide, 2 Linien)
+var RSL_REF = ["1", "3", "2"];
+function rslGet() {
+  var r = document.getElementsByName("RowRef");
+  for (var i = 0; i < r.length; i++) {
+    if (r[i].checked) { for (var k = 0; k < 3; k++) { if (RSL_REF[k] == r[i].value) return k; } }
+  }
+  return 0;
+}
+function rslOn() { var c = document.getElementById("RowOn"); if (c) c.checked = true; syncRowSlider(); }
+function rslSet(pos) {
+  var r = document.getElementsByName("RowRef");
+  for (var i = 0; i < r.length; i++) r[i].checked = (r[i].value == RSL_REF[pos]);
+  rslOn();
+}
+function syncRowSlider() {
+  var pos = rslGet(), k = document.getElementById("RowKnob"), f = document.getElementById("RowFill");
+  if (k) k.style.left = (pos * 50) + "%";
+  if (f) { f.style.left = (pos == 2 ? 50 : 0) + "%"; f.style.width = (pos == 1 ? 100 : 50) + "%"; }
+  for (var i = 0; i < 3; i++) {
+    var e = document.getElementById("RStop" + i);
+    if (e) e.className = (i == pos) ? "dstop on" : "dstop";
+  }
+  var c = document.getElementById("RowOn");
+  var on = c && c.checked;                         // unabhaengig von "Bemassung ausblenden"
+  var t = document.getElementById("RowTab");
+  if (t) t.className = on ? "dsl" : "dsl dim";
+}
+var rslDrag = false;
+function rslFromX(x) {
+  var t = document.getElementById("RowTrack");
+  if (!t) return;
+  var r = t.getBoundingClientRect(), w = r.right - r.left;
+  if (w <= 0) return;
+  var p = Math.round((x - r.left) / w * 2);
+  if (p < 0) p = 0; if (p > 2) p = 2;
+  if (p != rslGet() || !document.getElementById("RowOn").checked) rslSet(p);
+}
+function rslDown(e) {
+  e = e || window.event;
+  rslDrag = true;
+  rslFromX(e.clientX);
+  document.onmousemove = function (ev) { ev = ev || window.event; if (rslDrag) rslFromX(ev.clientX); return false; };
+  document.onmouseup = function () { rslDrag = false; document.onmousemove = null; document.onmouseup = null; };
+  return false;
+}
 function syncAutoMenu() {
-  var cb = document.getElementById("DimAuto"), m = document.getElementById("AutoMenu"), h = document.getElementById("DimHide");
-  if (cb && m) m.className = (cb.checked && !(h && h.checked)) ? "automenu" : "automenu dim";
+  var cb = document.getElementById("DimAuto"), m = document.getElementById("AutoMenu"), h = document.getElementById("DimOn");
+  if (cb && m) m.className = (cb.checked && !(h && !h.checked)) ? "automenu" : "automenu dim";
 }
 
 // Langer Pfad: ans Ende rollen, damit der Dateiname sichtbar ist
@@ -608,7 +675,7 @@ function syncPdfAsk() {
   var v = (e.value || "").replace(/^\s+|\s+$/g, "");
   a.value = (v == "") ? "1" : "0";
 }
-function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); syncSlider(); syncAutoMenu(); syncFontWarn(); syncPaper(); syncPdfAsk(); applyZoom(false); }
+function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); syncSlider(); syncRowSlider(); syncAutoMenu(); syncFontWarn(); syncPaper(); syncPdfAsk(); applyZoom(false); }
 
 window.onload = function () {
   reportScreen();

@@ -1906,9 +1906,10 @@ function main(script_path)
   dialog:AddCheckBox("DrawBorder", reg:GetBool("DrawBorder", false))
   dialog:AddCheckBox("DimAuto", reg:GetBool("DimAuto", true))
   dialog:AddCheckBox("VDimOff", reg:GetBool("VDimOff", false))
-  -- "Bemassung ausblenden": alter Zustand Auto aus + Vectric aus wird zu diesem Haken
-  dialog:AddCheckBox("DimHide", reg:GetBool("DimHide",
-                     (not reg:GetBool("DimAuto", true)) and reg:GetBool("VDimOff", false)))
+  -- Haken "Bemassung" (an = Vectric-/Autobemassung ins PDF); frueher umgekehrt "Bemassung ausblenden" (DimHide),
+  -- davor Auto aus + Vectric aus
+  local old_hide = reg:GetBool("DimHide", (not reg:GetBool("DimAuto", true)) and reg:GetBool("VDimOff", false))
+  dialog:AddCheckBox("DimOn", reg:GetBool("DimOn", not old_hide))
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
   dialog:AddCheckBox("DimOverallIn", reg:GetBool("DimOverallIn", false))
   dialog:AddCheckBox("DimEach", reg:GetBool("DimEach", false))
@@ -1921,6 +1922,11 @@ function main(script_path)
   dialog:AddCheckBox("DimRadiusOnce", reg:GetBool("DimRadiusOnce", true))
   dialog:AddCheckBox("DimRadiusIn", reg:GetBool("DimRadiusIn", false))
   dialog:AddCheckBox("DimAngle", reg:GetBool("DimAngle", false))
+  -- Reihenbemassung: Haken an/aus, Art 1 steigend / 2 Kette (frueher eine Auswahl "RowDim" 1 aus, 2 steigend, 3 Kette)
+  local old_row = reg:GetInt("RowDim", 1)
+  dialog:AddCheckBox("RowOn", reg:GetBool("RowOn", old_row > 1))
+  dialog:AddRadioGroup("RowType", reg:GetInt("RowType", (old_row == 3) and 2 or 1))
+  dialog:AddRadioGroup("RowRef", reg:GetInt("RowRef", 1))   -- Bezug: 1 Loecher, 2 Linien, 3 beide
   dialog:AddRadioGroup("DimColor", reg:GetInt("DimColor", 1))
   dialog:AddCheckBox("DimTextInline", reg:GetBool("DimTextInline", true))
   dialog:AddCheckBox("ShowScale", reg:GetBool("ShowScale", true))
@@ -2020,9 +2026,16 @@ function main(script_path)
   local radius_once = dialog:GetCheckBox("DimRadiusOnce")
   local radius_in   = dialog:GetCheckBox("DimRadiusIn")
   local dim_angle   = dialog:GetCheckBox("DimAngle")
+  local row_on      = dialog:GetCheckBox("RowOn")          -- Reihenbemassung an
+  local row_type    = dialog:GetRadioIndex("RowType")      -- 1 steigend, 2 Kette
+  if row_type ~= 2 then row_type = 1 end
+  local row_mode    = (not row_on) and 1 or ((row_type == 2) and 3 or 2)   -- 1 aus, 2 steigend, 3 Kette
+  local row_ref     = dialog:GetRadioIndex("RowRef")       -- 1 Loecher, 2 gerade Linien, 3 beide
+  if row_ref ~= 2 and row_ref ~= 3 then row_ref = 1 end
   local dim_auto    = dialog:GetCheckBox("DimAuto")
   vdims_off         = dialog:GetCheckBox("VDimOff")          -- Vectric-Bemassungen nicht ins PDF
-  local dim_hide    = dialog:GetCheckBox("DimHide")          -- gar keine Bemassung ins PDF
+  local dim_on      = dialog:GetCheckBox("DimOn")            -- Vectric-/Autobemassung an
+  local dim_hide    = not dim_on                             -- aus: keine Vectric-/Autobemassung ins PDF
   local dim_layer   = ""                   -- individuelle Bemassung ausgebaut (Branch individ_bem)
   local hide_dims   = false
   local dim_color   = dialog:GetRadioIndex("DimColor")   -- 1 schwarz, 2 blau, 3 rot, 4 gruen, 5 grau
@@ -2068,12 +2081,16 @@ function main(script_path)
   reg:SetBool("DimRadiusOnce", radius_once)
   reg:SetBool("DimRadiusIn", radius_in)
   reg:SetBool("DimAngle", dim_angle)
+  reg:SetBool("RowOn", row_on)
+  reg:SetInt("RowType", row_type)
+  reg:SetInt("RowRef", row_ref)
   reg:SetBool("DimAuto", dim_auto)
   reg:SetBool("VDimOff", vdims_off)
-  reg:SetBool("DimHide", dim_hide)
+  reg:SetBool("DimOn", dim_on)
   if dim_hide then                  -- ausgeblendet: Regler-Stellung bleibt gemerkt, gedruckt wird nichts
-    dim_auto, vdims_off = false, true
+    dim_auto, vdims_off = false, true       -- Reihenbemassung bleibt davon unabhaengig
   end
+  local dim_ordinate = row_mode > 1        -- eigener Schalter, unabhaengig von der Autobemassung
 
   if not dim_auto then              -- Autobemassung aus: alle automatischen Masse aus (Haekchen bleiben gemerkt)
     dim_overall, dim_each, dim_poly, dim_radius, dim_angle, dim_circle = false, false, false, false, false, false
@@ -2671,14 +2688,62 @@ function main(script_path)
       for _, l in ipairs(ls) do                      -- weit versetzte schraege Masse brauchen Platz
         if l.ex then depth = math.max(depth, tx(vminx) - l.ex, ty(vminy) - l.ey) end
       end
-      return hs, vs, cs, depth, ls, ins
+      -- Steigende Bemassung der Lochmitten: X-Werte unter, Y-Werte links neben der Zeichnung,
+      -- gemessen ab der linken unteren Ecke; ausserhalb aller anderen Masse
+      local ords = nil
+      if dim_ordinate then
+        local tol = in_mm and 0.05 or 0.002
+        local xs, ys = {}, {}                          -- je Wert: tiefster bzw. linkester Kreis
+        local function addv(list, v, other, r)
+          for _, q in ipairs(list) do
+            if math.abs(q.v - v) < tol then
+              if other < q.o then q.o, q.r = other, r end
+              return
+            end
+          end
+          list[#list + 1] = { v = v, o = other, r = r }
+        end
+        for _, p in ipairs(paths) do                   -- auch Kreise/Linien in Gruppen
+          if row_ref ~= 2 and IsCircle(p, tol) then    -- Lochmitten
+            local cx, cy, r = (p.minx + p.maxx) / 2, (p.miny + p.maxy) / 2, (p.maxx - p.minx) / 2
+            addv(xs, cx, cy, r); addv(ys, cy, cx, r)
+          end
+          if row_ref ~= 1 and not p.closed then        -- Lage gerader Linien (offene Vektoren)
+            for _, sg in ipairs(p.segs) do
+              if type(sg) == "table" then
+                local dx, dy = math.abs(sg[3] - sg[1]), math.abs(sg[4] - sg[2])
+                if dx < tol and dy > tol then          -- senkrecht -> X-Wert
+                  addv(xs, (sg[1] + sg[3]) / 2, math.min(sg[2], sg[4]), 0)
+                elseif dy < tol and dx > tol then      -- waagrecht -> Y-Wert
+                  addv(ys, (sg[2] + sg[4]) / 2, math.min(sg[1], sg[3]), 0)
+                end
+              end
+            end
+          end
+        end
+        if #xs > 0 then
+          table.sort(xs, function(a, b) return a.v < b.v end)
+          table.sort(ys, function(a, b) return a.v < b.v end)
+          local base = depth + 4 * MM
+          local maxw = 0
+          for _, q in ipairs(xs) do maxw = math.max(maxw, TextWidth(fmt(q.v - vminx), fs)) end
+          for _, q in ipairs(ys) do maxw = math.max(maxw, TextWidth(fmt(q.v - vminy), fs)) end
+          ords = { xs = xs, ys = ys, ax = ty(vminy) - base, ay = tx(vminx) - base }
+          if row_mode == 3 then
+            depth = base + 2 * fs + 1 * MM             -- Kette: Zahlen auf der Masslinie
+          else
+            depth = base + 2.5 * MM + maxw + 1 * MM    -- steigend: Zahlen quer am Ende
+          end
+        end
+      end
+      return hs, vs, cs, depth, ls, ins, ords
     end
 
     Layout(dim_res)
-    local hdims, vdims, cdims, depth, ldims, idims = PlanDims()
+    local hdims, vdims, cdims, depth, ldims, idims, odims = PlanDims()
     if depth > dim_res + 0.5 then        -- mehr Spuren noetig -> mehr Platz reservieren
       Layout(depth)
-      hdims, vdims, cdims, _, ldims, idims = PlanDims()
+      hdims, vdims, cdims, _, ldims, idims, odims = PlanDims()
     end
     if scale_mode == 3 and too_big ~= nil then
       local nm = string.format("%g", too_big):gsub("%.", lang == 2 and "." or ",")
@@ -2752,6 +2817,55 @@ function main(script_path)
     end
     for _, it in ipairs(idims) do
       if not it.h then d:vdim(it.a, it.b, it.pos, it.pos, it.label, it.pair and "pair" or true) end
+    end
+
+    -- Steigende Bemassung der Lochmitten (Ordinaten): Hilfslinie vom Loch bis zur Bezugslinie,
+    -- Zahl am Ende; zu dicht liegende Zahlen werden seitlich versetzt (kurzer Knick)
+    if odims then
+      local gap, step = 1 * MM, 1.15 * fs
+      local function run(list, horiz)
+        -- Ursprung (0) an der linken bzw. unteren Kante der Zeichnung
+        local items = { { pos = horiz and tx(vminx) or ty(vminy), v = horiz and vminx or vminy, lab = fmt(0), from = nil } }
+        for _, q in ipairs(list) do
+          if horiz then
+            items[#items + 1] = { pos = tx(q.v), v = q.v, lab = fmt(q.v - vminx), from = ty(q.o - q.r) - gap }
+          else
+            items[#items + 1] = { pos = ty(q.v), v = q.v, lab = fmt(q.v - vminy), from = tx(q.o - q.r) - gap }
+          end
+        end
+        if #items > 1 and math.abs(items[2].pos - items[1].pos) < 0.01 then table.remove(items, 1) end
+        local edge = horiz and odims.ax or odims.ay
+        if row_mode == 3 then
+          -- Kettenmass: Hilfslinien bis zur Masslinie, dann Mass von Punkt zu Punkt
+          for _, it in ipairs(items) do
+            local from = it.from or (horiz and (ty(vminy) - gap) or (tx(vminx) - gap))
+            if horiz then d:line(it.pos, from, it.pos, edge - 1 * MM) else d:line(from, it.pos, edge - 1 * MM, it.pos) end
+          end
+          for i = 1, #items - 1 do
+            local a, b = items[i], items[i + 1]
+            local lab = fmt(b.v - a.v)
+            if horiz then d:hdim(a.pos, b.pos, edge, edge, lab, true) else d:vdim(a.pos, b.pos, edge, edge, lab, true) end
+          end
+          return
+        end
+        local last = -math.huge
+        for _, it in ipairs(items) do
+          it.t = math.max(it.pos, last + step); last = it.t
+        end
+        for _, it in ipairs(items) do
+          if horiz then
+            if it.from then d:line(it.pos, it.from, it.pos, edge) else d:line(it.pos, ty(vminy) - gap, it.pos, edge) end
+            d:line(it.pos, edge, it.t, edge - 1.5 * MM)
+            d:text(it.t + 0.35 * fs, edge - 2 * MM, it.lab, fs, true, "right")
+          else
+            if it.from then d:line(it.from, it.pos, edge, it.pos) else d:line(tx(vminx) - gap, it.pos, edge, it.pos) end
+            d:line(edge, it.pos, edge - 1.5 * MM, it.t)
+            d:text(edge - 2 * MM, it.t - 0.35 * fs, it.lab, fs, false, "right")
+          end
+        end
+      end
+      run(odims.xs, true)
+      run(odims.ys, false)
     end
 
     -- Radien an Boegen: alle Boegen; mit "gleiche Radien nur einmal" je Vektor jeder Radius nur 1x
