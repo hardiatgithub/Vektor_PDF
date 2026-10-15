@@ -19,6 +19,9 @@ Neueste Version steht oben.
     (der frühere Zustand „Auto aus + Vectric aus“ wird beim ersten Start zu diesem Haken).
   - Rechts der Knopf **„Auto-Einstellungen ►“** öffnet ein neu geordnetes Menü: eine Zeile je Maßart, „innen“ in einer
     eigenen Spalte, „Einzelmaße ab“ unten abgesetzt. Ausgegraut, wenn die Autobemaßung nicht aktiv ist.
+- **Reihenbemaßung „je Teil“** (Haken neben „Bohrungen nur unten / links“): jedes Teil – ein geschlossener Umriss, der
+  in keinem anderen liegt – bekommt seine eigene Reihe ab seiner linken unteren Ecke, direkt am Teil (mit Aufteilung
+  oben/unten, links/rechts innerhalb des Teils). Die Einzelmaße des Teils rücken nach außen. Ohne Haken wie bisher.
 - **Reihenbemaßung nach Seiten aufgeteilt:** Punkte in der oberen Hälfte werden oben bemaßt, in der unteren unten;
   Y-Werte links bzw. rechts nach Lage – z. B. obere und untere Lamello-Nuten je eine eigene Kette. Eine Reihe oben/rechts
   entfällt nur, wenn sie genau dieselben Werte hätte wie unten/links (z. B. Tür mit Topfbohrungen übereinander).
