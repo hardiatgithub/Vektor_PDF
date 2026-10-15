@@ -19,6 +19,18 @@ Neueste Version steht oben.
     (der frühere Zustand „Auto aus + Vectric aus“ wird beim ersten Start zu diesem Haken).
   - Rechts der Knopf **„Auto-Einstellungen ►“** öffnet ein neu geordnetes Menü: eine Zeile je Maßart, „innen“ in einer
     eigenen Spalte, „Einzelmaße ab“ unten abgesetzt. Ausgegraut, wenn die Autobemaßung nicht aktiv ist.
+- **Reihenbemaßung nach Seiten aufgeteilt:** Punkte in der oberen Hälfte werden oben bemaßt, in der unteren unten;
+  Y-Werte links bzw. rechts nach Lage – z. B. obere und untere Lamello-Nuten je eine eigene Kette. Eine Reihe oben/rechts
+  entfällt nur, wenn sie genau dieselben Werte hätte wie unten/links (z. B. Tür mit Topfbohrungen übereinander).
+  Mit Reihenbemaßung werden auch die Einzelmaße („Jeder Vektor“) aufgeteilt: Teile in der oberen/rechten Hälfte
+  bekommen ihr Maß oben/rechts (außer bei „außen“). Ohne Reihenbemaßung bleibt alles wie bisher.
+  Schalter **„Bohrungen nur unten / links“**: runde Bohrungen (z. B. durchgehende Lochreihen) werden nicht aufgeteilt,
+  sondern nur unten bzw. links bemaßt; Langlöcher und Linien bleiben auf ihrer Seite.
+  Jeder Wert erscheint nur einmal: liegt er oben bei einem Langloch/einer Linie und unten nur bei Bohrungen (oder
+  umgekehrt), bleibt er beim Langloch – z. B. Lochreihe unter dem oberen Lamello wird nicht zusätzlich unten bemaßt.
+- **Reihenbemaßung innen, Autobemaßung außen:** Die Reihenbemaßung bekommt die erste Spur direkt an der Zeichnung;
+  Autobemaßungen außerhalb der Zeichnung (z. B. Gesamtmaß) rücken um ihre Breite nach außen – Kette nah am Teil,
+  Gesamtmaß ganz außen. Maße am Teil oder „innen“ bleiben, wo sie sind.
 - **Reihenbemaßung: Langlöcher und Ende** – Langlöcher (Rechteck mit runden Enden, auch mit als Polygon angenäherten
   Enden wie die Lamello-Nuten aus „Korpusbearbeitung“) zählen wie Löcher und werden über ihre Mitte bemaßt; die Reihe läuft jetzt bis zur rechten bzw. oberen Kante der Zeichnung, damit die Kette
   geschlossen ist (z. B. 429 · 431 statt nur 429).

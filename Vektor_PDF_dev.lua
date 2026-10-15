@@ -41,6 +41,7 @@ local use_vdims = false             -- Vectric-Masse nur aus eingeschalteten Lay
 local vdims_off = false             -- Schalter "Vectric-Bemassung aus": keine Vectric-Masse ins PDF
 local diag_path = nil               -- Datei fuer die Vectric-Mass-Diagnose (vdim_diag.txt im Gadget-Ordner)
 local diag_lines = {}               -- Zeilen der Diagnose (eine je Vectric-Bemassung)
+local row_diag_done = false         -- Reihenbemassungs-Diagnose schon geschrieben
 local layer_colors = {}                          -- Layer-Id -> Farbe (fuer "Nur ausgewaehlte")
 local layer_color_ok, layer_color_fail = 0, 0   -- Layerfarben gelesen / nicht lesbar
 local layer_color_diag = nil
@@ -1288,14 +1289,15 @@ end
 function Draw:hdim(xa, xb, yref, yline, label, inner, brk)
   local gap, over = EXT_GAP, 1.5 * MM
   if not inner then                                -- Innenmass: keine Masshilfslinien
-    if brk and brk < yref - gap - 5 * MM then
+    local sg = (yline > yref) and 1 or -1          -- Masslinie ueber (1) oder unter (-1) dem Teil
+    if brk and sg < 0 and brk < yref - gap - 5 * MM then
       for _, x in ipairs({ xa, xb }) do
         self:line(x, yref - gap, x, yref - gap - 3 * MM)
         self:line(x, brk - gap, x, yline - over)
       end
     else
-      self:line(xa, yref - gap, xa, yline - over)
-      self:line(xb, yref - gap, xb, yline - over)
+      self:line(xa, yref + sg * gap, xa, yline + sg * over)
+      self:line(xb, yref + sg * gap, xb, yline + sg * over)
     end
   end
   if self:narrow(xb - xa, label) then
@@ -1638,14 +1640,15 @@ end
 function Draw:vdim(ya, yb, xref, xline, label, inner, brk)
   local gap, over = EXT_GAP, 1.5 * MM
   if not inner then                                -- Innenmass: keine Masshilfslinien
-    if brk and brk < xref - gap - 5 * MM then
+    local sg = (xline > xref) and 1 or -1          -- Masslinie rechts (1) oder links (-1) vom Teil
+    if brk and sg < 0 and brk < xref - gap - 5 * MM then
       for _, y in ipairs({ ya, yb }) do
         self:line(xref - gap, y, xref - gap - 3 * MM, y)
         self:line(brk - gap, y, xline - over, y)
       end
     else
-      self:line(xref - gap, ya, xline - over, ya)
-      self:line(xref - gap, yb, xline - over, yb)
+      self:line(xref + sg * gap, ya, xline + sg * over, ya)
+      self:line(xref + sg * gap, yb, xline + sg * over, yb)
     end
   end
   if self:narrow(yb - ya, label) then
@@ -1864,6 +1867,7 @@ end
 function main(script_path)
   diag_path = script_path .. "\\vdim_diag.txt"
   diag_lines = {}
+  row_diag_done = false
   local reg = Registry("PDF_Export")
   local lang = reg:GetInt("Lang", 1)                 -- 1 = Deutsch, 2 = English
   local function T(de, en) return (lang == 2) and en or de end
@@ -1973,6 +1977,7 @@ function main(script_path)
   local old_row = reg:GetInt("RowDim", 1)
   dialog:AddCheckBox("RowOn", reg:GetBool("RowOn", old_row > 1))
   dialog:AddRadioGroup("RowType", reg:GetInt("RowType", (old_row == 3) and 2 or 1))
+  dialog:AddCheckBox("RowHolesOnce", reg:GetBool("RowHolesOnce", false))   -- Bohrungen nur unten/links
   dialog:AddRadioGroup("RowRef", reg:GetInt("RowRef", 1))   -- Bezug: 1 Loecher, 2 Linien, 3 beide
   dialog:AddRadioGroup("DimColor", reg:GetInt("DimColor", 1))
   dialog:AddCheckBox("DimTextInline", reg:GetBool("DimTextInline", true))
@@ -2076,6 +2081,7 @@ function main(script_path)
   local dim_angle   = dialog:GetCheckBox("DimAngle")
   local row_on      = dialog:GetCheckBox("RowOn")          -- Reihenbemassung an
   local row_type    = dialog:GetRadioIndex("RowType")      -- 1 steigend, 2 Kette
+  local row_holes_once = dialog:GetCheckBox("RowHolesOnce") -- runde Bohrungen nur unten/links (nicht aufteilen)
   if row_type ~= 2 then row_type = 1 end
   local row_mode    = (not row_on) and 1 or ((row_type == 2) and 3 or 2)   -- 1 aus, 2 steigend, 3 Kette
   local row_ref     = dialog:GetRadioIndex("RowRef")       -- 1 Loecher, 2 gerade Linien, 3 beide
@@ -2132,6 +2138,7 @@ function main(script_path)
   reg:SetBool("DimAngle", dim_angle)
   reg:SetBool("RowOn", row_on)
   reg:SetInt("RowType", row_type)
+  reg:SetBool("RowHolesOnce", row_holes_once)
   reg:SetInt("RowRef", row_ref)
   reg:SetBool("DimAuto", dim_auto)
   reg:SetBool("VDimOff", vdims_off)
@@ -2479,9 +2486,12 @@ function main(script_path)
         end
       end
     end
+    local rres_base = nil                  -- Reserve oben/rechts ohne Reihen-/Einzelmasse (fuer PlanDims)
     local function PlanDims()
       BuildVfix()
       local hs, vs, cs, ls, ins = {}, {}, {}, {}, {}
+      local hs_t, vs_r = {}, {}            -- Einzelmasse oben bzw. rechts (bei Reihenbemassung aufgeteilt)
+      local midx, midy = (vminx + vmaxx) / 2, (vminy + vmaxy) / 2
       local arrow_pt = ((arrow_mm and arrow_mm > 0) and arrow_mm * MM or 2.5 * MM) * dim_k
       local function item(a, b, ref, line, label)
         local tw, mid = TextWidth(label, fs), (a + b) / 2
@@ -2540,13 +2550,23 @@ function main(script_path)
                 -- ausserhalb: Masslinie vor (unter) bzw. links neben der ganzen Zeichnung, Hilfslinien vom Teil
                 local ly = each_out and ty(vminy) or ty(p.miny)
                 local lx = each_out and tx(vminx) or tx(p.minx)
+                -- mit Reihenbemassung: Teile in der oberen/rechten Haelfte oben/rechts bemassen (wie die Reihe)
+                local split = dim_ordinate and not each_out
                 if not same_w then
-                  hs[#hs + 1] = item(tx(p.minx), tx(p.maxx), ty(p.miny), ly - near, fmt(pw))
-                  if each_out then hs[#hs].brk = ty(vminy) end     -- Hilfslinie unterbrochen
+                  if split and (p.miny + p.maxy) / 2 > midy then
+                    hs_t[#hs_t + 1] = item(tx(p.minx), tx(p.maxx), ty(p.maxy), ty(p.maxy) + near, fmt(pw))
+                  else
+                    hs[#hs + 1] = item(tx(p.minx), tx(p.maxx), ty(p.miny), ly - near, fmt(pw))
+                    if each_out then hs[#hs].brk = ty(vminy) end     -- Hilfslinie unterbrochen
+                  end
                 end
                 if not same_h then
-                  vs[#vs + 1] = item(ty(p.miny), ty(p.maxy), tx(p.minx), lx - near, fmt(ph))
-                  if each_out then vs[#vs].brk = tx(vminx) end
+                  if split and (p.minx + p.maxx) / 2 > midx then
+                    vs_r[#vs_r + 1] = item(ty(p.miny), ty(p.maxy), tx(p.maxx), tx(p.maxx) + near, fmt(ph))
+                  else
+                    vs[#vs + 1] = item(ty(p.miny), ty(p.maxy), tx(p.minx), lx - near, fmt(ph))
+                    if each_out then vs[#vs].brk = tx(vminx) end
+                  end
                 end
               end
             end
@@ -2625,7 +2645,8 @@ function main(script_path)
         end
       end
       -- naechstgelegene zuerst; wer kollidiert, rutscht eine Spur weiter nach aussen
-      local function place(list, total, fixed)
+      local function place(list, total, fixed, dir)
+        dir = dir or -1                    -- -1: nach unten/links weiterruecken, 1: nach oben/rechts
         table.sort(list, function(p, q) return p.ref > q.ref end)
         if total then list[#list + 1] = total end
         local done = {}
@@ -2636,7 +2657,7 @@ function main(script_path)
             moved = false
             for _, q in ipairs(done) do
               if it.lo < q.hi and it.hi > q.lo and math.abs(it.line - q.line) < lane - 0.01 then
-                it.line = q.line - lane
+                it.line = q.line + dir * lane
                 moved = true
               end
             end
@@ -2687,6 +2708,7 @@ function main(script_path)
       if th then for _, q in ipairs(vfix_h) do if same(th, q) then th = nil; break end end end
       if tv then for _, q in ipairs(vfix_v) do if same(tv, q) then tv = nil; break end end end
       hs = dedupe(hs, th, vfix_h); vs = dedupe(vs, tv, vfix_v)
+      hs_t = dedupe(hs_t, nil, {}); vs_r = dedupe(vs_r, nil, {})
       -- Innenmasse ebenfalls nicht doppelt
       do
         local keep = {}
@@ -2702,6 +2724,7 @@ function main(script_path)
         ins = keep
       end
       place(hs, th, vfix_h); place(vs, tv, vfix_v)
+      place(hs_t, nil, {}, 1); place(vs_r, nil, {}, 1)
 
       -- Schraege Masse: Abstand so weit vergroessern, bis die Masslinie samt Zahl frei liegt
       local boxes = {}
@@ -2743,6 +2766,121 @@ function main(script_path)
         boxes[#boxes + 1] = { math.min(ax, bx) - 0.5 * fs, math.min(ay, by) - 0.5 * fs,
                               math.max(ax, bx) + 0.5 * fs, math.max(ay, by) + 0.5 * fs }
       end
+      -- Reihenbemassung (Lochmitten/Linien), gemessen ab der linken unteren Ecke. Aufgeteilt nach Lage:
+      -- X-Werte von Punkten in der unteren Haelfte unten, aus der oberen Haelfte oben; Y-Werte links/rechts.
+      -- Die Reihe bekommt die erste Spur direkt an der Zeichnung; Autobemassungen ruecken nach aussen.
+      local ords, band_b, band_l, band_t, band_r = nil, nil, nil, nil, nil
+      if dim_ordinate then
+        local tol = in_mm and 0.05 or 0.002
+        local L = { b = {}, t = {}, l = {}, r = {} }   -- je Wert: Kante des Punkts zur Seite hin
+        -- strong: Langloch/Linie (gehoert eindeutig auf seine Seite); runde Bohrungen sind "schwach"
+        local function addv(list, v, edge, sgn, strong)
+          for _, q in ipairs(list) do
+            if math.abs(q.v - v) < tol then
+              if sgn * edge > sgn * q.e then q.e = edge end   -- der Seite naechster Punkt
+              q.strong = q.strong or strong
+              return
+            end
+          end
+          list[#list + 1] = { v = v, e = edge, strong = strong }
+        end
+        local function addp(cx, cy, x0, y0, x1, y1, fixed, strong)  -- Punkt (cx, cy) mit Umriss x0..x1, y0..y1
+          if cy > midy and not fixed then addv(L.t, cx, y1, 1, strong) else addv(L.b, cx, y0, -1, strong) end
+          if cx > midx and not fixed then addv(L.r, cy, x1, 1, strong) else addv(L.l, cy, x0, -1, strong) end
+        end
+        -- Diagnose (einmal je Seite): was die Reihenbemassung von jedem Vektor haelt
+        if not row_diag_done then
+          row_diag_done = true
+          diag_lines[#diag_lines + 1] = string.format("--- Reihenbemassung: Mitte x %.2f y %.2f, Bezug %d, Art %d ---", midx, midy, row_ref, row_mode)
+          for i, p in ipairs(paths) do
+            if i > 80 then diag_lines[#diag_lines + 1] = "  ..." break end
+            local nl, nc = 0, 0
+            for _, c in ipairs(p.cmds) do if c[1] == "l" then nl = nl + 1 elseif c[1] == "c" then nc = nc + 1 end end
+            diag_lines[#diag_lines + 1] = string.format("  #%d %s box %.2f %.2f %.2f %.2f | l=%d c=%d arcs=%d | Kreis=%s Langloch=%s",
+              i, p.closed and "zu" or "offen", p.minx, p.miny, p.maxx, p.maxy, nl, nc, #p.arcs,
+              tostring(IsCircle(p, tol)), tostring(IsSlot(p, tol)))
+          end
+        end
+        for _, p in ipairs(paths) do                   -- auch Kreise/Linien in Gruppen
+          if row_ref ~= 2 and (IsCircle(p, tol) or IsSlot(p, tol)) then   -- Mitten von Loechern und Langloechern
+            -- Schalter "Bohrungen nur unten/links": runde Bohrungen nicht nach Seiten aufteilen
+            local round = IsCircle(p, tol)
+            local fixed = row_holes_once and round
+            addp((p.minx + p.maxx) / 2, (p.miny + p.maxy) / 2, p.minx, p.miny, p.maxx, p.maxy, fixed, not round)
+          end
+          if row_ref ~= 1 and not p.closed then        -- Lage gerader Linien (offene Vektoren)
+            for _, sg in ipairs(p.segs) do
+              if type(sg) == "table" then
+                local dx, dy = math.abs(sg[3] - sg[1]), math.abs(sg[4] - sg[2])
+                local y0, y1 = math.min(sg[2], sg[4]), math.max(sg[2], sg[4])
+                local x0, x1 = math.min(sg[1], sg[3]), math.max(sg[1], sg[3])
+                if dx < tol and dy > tol then          -- senkrecht -> X-Wert
+                  local cy = (y0 + y1) / 2
+                  if cy > midy then addv(L.t, x0, y1, 1, true) else addv(L.b, x0, y0, -1, true) end
+                elseif dy < tol and dx > tol then      -- waagrecht -> Y-Wert
+                  local cx = (x0 + x1) / 2
+                  if cx > midx then addv(L.r, y0, x1, 1, true) else addv(L.l, y0, x0, -1, true) end
+                end
+              end
+            end
+          end
+        end
+        -- Reihe oben bzw. rechts nur weglassen, wenn sie genau dieselben Werte haette wie unten bzw. links
+        -- (z. B. Tuer mit zwei Topfbohrungen uebereinander); sonst vollstaendig zeigen, damit jedes Teil
+        -- auf seiner Seite bemasst ist
+        local function strip(list, other)
+          if #list ~= #other then return list end
+          for _, q in ipairs(list) do
+            local dup = false
+            for _, o in ipairs(other) do if math.abs(o.v - q.v) < tol then dup = true; break end end
+            if not dup then return list end
+          end
+          return {}
+        end
+        L.t = strip(L.t, L.b); L.r = strip(L.r, L.l)
+        -- Wert in beiden Reihen (oben und unten bzw. links und rechts): nur einmal zeigen.
+        -- Gehoert er auf einer Seite zu einem Langloch/einer Linie und auf der anderen nur zu Bohrungen,
+        -- bleibt er bei dem Langloch; nur Bohrungen auf beiden Seiten -> unten bzw. links;
+        -- Langloecher/Linien auf beiden Seiten -> in beiden Reihen.
+        local function dedup(near, far)               -- near = unten/links, far = oben/rechts
+          local keep_n, keep_f = {}, {}
+          for _, q in ipairs(near) do keep_n[q] = true end
+          for _, q in ipairs(far) do keep_f[q] = true end
+          for _, a in ipairs(near) do
+            for _, b in ipairs(far) do
+              if math.abs(a.v - b.v) < tol then
+                if b.strong and not a.strong then keep_n[a] = false
+                elseif not b.strong then keep_f[b] = false end
+              end
+            end
+          end
+          local n2, f2 = {}, {}
+          for _, q in ipairs(near) do if keep_n[q] then n2[#n2 + 1] = q end end
+          for _, q in ipairs(far) do if keep_f[q] then f2[#f2 + 1] = q end end
+          return n2, f2
+        end
+        L.b, L.t = dedup(L.b, L.t); L.l, L.r = dedup(L.l, L.r)
+        local base = 4 * MM                            -- erste Spur, direkt an der Zeichnung
+        local function band(list, origin)
+          if #list == 0 then return nil end
+          table.sort(list, function(a, b) return a.v < b.v end)
+          if row_mode == 3 then return base + 2 * fs + 1 * MM end   -- Kette: Zahlen auf der Masslinie
+          local maxw = 0
+          for _, q in ipairs(list) do maxw = math.max(maxw, TextWidth(fmt(q.v - origin), fs)) end
+          return base + 2.5 * MM + maxw + 1 * MM       -- steigend: Zahlen quer am Ende
+        end
+        band_b, band_t = band(L.b, vminx), band(L.t, vminx)
+        band_l, band_r = band(L.l, vminy), band(L.r, vminy)
+        if band_b or band_t or band_l or band_r then
+          ords = { b = L.b, t = L.t, l = L.l, r = L.r,
+                   eb = ty(vminy) - base, et = ty(vmaxy) + base, el = tx(vminx) - base, er = tx(vmaxx) + base }
+          -- Autobemassungen ausserhalb der Zeichnung um die Breite der Reihe nach aussen schieben
+          if band_b then for _, it in ipairs(hs) do if it.line < ty(vminy) - 0.01 then it.line = it.line - band_b end end end
+          if band_l then for _, it in ipairs(vs) do if it.line < tx(vminx) - 0.01 then it.line = it.line - band_l end end end
+          if band_t then for _, it in ipairs(hs_t) do it.line = it.line + band_t end end
+          if band_r then for _, it in ipairs(vs_r) do it.line = it.line + band_r end end
+        end
+      end
       -- benoetigter Platz unter bzw. links neben der Zeichnung
       local depth = 0
       for _, it in ipairs(hs) do depth = math.max(depth, ty(vminy) - it.line) end
@@ -2750,61 +2888,24 @@ function main(script_path)
       for _, l in ipairs(ls) do                      -- weit versetzte schraege Masse brauchen Platz
         if l.ex then depth = math.max(depth, tx(vminx) - l.ex, ty(vminy) - l.ey) end
       end
-      -- Steigende Bemassung der Lochmitten: X-Werte unter, Y-Werte links neben der Zeichnung,
-      -- gemessen ab der linken unteren Ecke; ausserhalb aller anderen Masse
-      local ords = nil
-      if dim_ordinate then
-        local tol = in_mm and 0.05 or 0.002
-        local xs, ys = {}, {}                          -- je Wert: tiefster bzw. linkester Kreis
-        local function addv(list, v, other, r)
-          for _, q in ipairs(list) do
-            if math.abs(q.v - v) < tol then
-              if other < q.o then q.o, q.r = other, r end
-              return
-            end
-          end
-          list[#list + 1] = { v = v, o = other, r = r }
-        end
-        for _, p in ipairs(paths) do                   -- auch Kreise/Linien in Gruppen
-          if row_ref ~= 2 and (IsCircle(p, tol) or IsSlot(p, tol)) then   -- Mitten von Loechern und Langloechern
-            local cx, cy = (p.minx + p.maxx) / 2, (p.miny + p.maxy) / 2
-            addv(xs, cx, cy, (p.maxy - p.miny) / 2); addv(ys, cy, cx, (p.maxx - p.minx) / 2)
-          end
-          if row_ref ~= 1 and not p.closed then        -- Lage gerader Linien (offene Vektoren)
-            for _, sg in ipairs(p.segs) do
-              if type(sg) == "table" then
-                local dx, dy = math.abs(sg[3] - sg[1]), math.abs(sg[4] - sg[2])
-                if dx < tol and dy > tol then          -- senkrecht -> X-Wert
-                  addv(xs, (sg[1] + sg[3]) / 2, math.min(sg[2], sg[4]), 0)
-                elseif dy < tol and dx > tol then      -- waagrecht -> Y-Wert
-                  addv(ys, (sg[2] + sg[4]) / 2, math.min(sg[1], sg[3]), 0)
-                end
-              end
-            end
-          end
-        end
-        if #xs > 0 then
-          table.sort(xs, function(a, b) return a.v < b.v end)
-          table.sort(ys, function(a, b) return a.v < b.v end)
-          local base = depth + 4 * MM
-          local maxw = 0
-          for _, q in ipairs(xs) do maxw = math.max(maxw, TextWidth(fmt(q.v - vminx), fs)) end
-          for _, q in ipairs(ys) do maxw = math.max(maxw, TextWidth(fmt(q.v - vminy), fs)) end
-          ords = { xs = xs, ys = ys, ax = ty(vminy) - base, ay = tx(vminx) - base }
-          if row_mode == 3 then
-            depth = base + 2 * fs + 1 * MM             -- Kette: Zahlen auf der Masslinie
-          else
-            depth = base + 2.5 * MM + maxw + 1 * MM    -- steigend: Zahlen quer am Ende
-          end
-        end
-      end
-      return hs, vs, cs, depth, ls, ins, ords
+      depth = math.max(depth, band_b or 0, band_l or 0)
+      -- Platz oben/rechts (teilt sich die Reserve mit den Radius-Beschriftungen)
+      local tr = math.max(band_t or 0, band_r or 0)
+      for _, it in ipairs(hs_t) do tr = math.max(tr, it.line - ty(vmaxy) + 1.3 * fs) end
+      for _, it in ipairs(vs_r) do tr = math.max(tr, it.line - tx(vmaxx) + 1.3 * fs) end
+      if rres_base == nil then rres_base = rres end
+      local want = math.max(rres_base, tr)
+      local grew = want > rres + 0.5
+      rres = math.max(rres, want)
+      for _, it in ipairs(hs_t) do hs[#hs + 1] = it end
+      for _, it in ipairs(vs_r) do vs[#vs + 1] = it end
+      return hs, vs, cs, depth, ls, ins, ords, grew
     end
 
     Layout(dim_res)
-    local hdims, vdims, cdims, depth, ldims, idims, odims = PlanDims()
-    if depth > dim_res + 0.5 then        -- mehr Spuren noetig -> mehr Platz reservieren
-      Layout(depth)
+    local hdims, vdims, cdims, depth, ldims, idims, odims, grew = PlanDims()
+    if depth > dim_res + 0.5 or grew then  -- mehr Spuren noetig (unten/links oder oben/rechts) -> neu aufteilen
+      Layout(math.max(depth, dim_res))
       hdims, vdims, cdims, _, ldims, idims, odims = PlanDims()
     end
     if scale_mode == 3 and too_big ~= nil then
@@ -2885,40 +2986,42 @@ function main(script_path)
     -- Zahl am Ende; zu dicht liegende Zahlen werden seitlich versetzt (kurzer Knick)
     if odims then
       local gap, step = 1 * MM, 1.15 * fs
-      local function run(list, horiz)
-        -- Ursprung (0) an der linken bzw. unteren Kante der Zeichnung
-        local items = { { pos = horiz and tx(vminx) or ty(vminy), v = horiz and vminx or vminy, lab = fmt(0), from = nil } }
+      -- side: "b" unten, "t" oben, "l" links, "r" rechts
+      local function run(list, side)
+        if #list == 0 then return end
+        local horiz = (side == "b" or side == "t")
+        local sgn = (side == "t" or side == "r") and 1 or -1     -- Richtung von der Zeichnung weg
+        local origin = horiz and vminx or vminy
+        local function P(v) return horiz and tx(v) or ty(v) end
+        local function Q(e) return horiz and ty(e) or tx(e) end  -- Lage quer zur Reihe (Seitenkoordinate)
+        local items = { { pos = P(origin), v = origin, lab = fmt(0), from = nil } }
         for _, q in ipairs(list) do
-          if horiz then
-            items[#items + 1] = { pos = tx(q.v), v = q.v, lab = fmt(q.v - vminx), from = ty(q.o - q.r) - gap }
-          else
-            items[#items + 1] = { pos = ty(q.v), v = q.v, lab = fmt(q.v - vminy), from = tx(q.o - q.r) - gap }
-          end
+          items[#items + 1] = { pos = P(q.v), v = q.v, lab = fmt(q.v - origin), from = Q(q.e) + sgn * gap }
         end
         if #items > 1 and math.abs(items[2].pos - items[1].pos) < 0.01 then table.remove(items, 1) end
         -- Ende (rechte bzw. obere Kante der Zeichnung) mitnehmen, damit die Kette geschlossen ist
         local vend = horiz and vmaxx or vmaxy
-        local pend = horiz and tx(vmaxx) or ty(vmaxy)
-        if math.abs(items[#items].pos - pend) > 0.01 then
-          items[#items + 1] = { pos = pend, v = vend, lab = fmt(vend - (horiz and vminx or vminy)), from = nil }
+        if math.abs(items[#items].pos - P(vend)) > 0.01 then
+          items[#items + 1] = { pos = P(vend), v = vend, lab = fmt(vend - origin), from = nil }
         end
-        local edge = horiz and odims.ax or odims.ay
+        local edge = odims["e" .. side]
         -- Hilfslinie vom Punkt bis 'to', unterbrochen: kurzes Stueck am Loch/an der Linie, dann erst ab dem Umriss
-        local rim = horiz and (ty(vminy) - gap) or (tx(vminx) - gap)
+        local rimv = (side == "b") and vminy or (side == "t") and vmaxy or (side == "l") and vminx or vmaxx
+        local rim = Q(rimv) + sgn * gap
+        local function seg(a, b, pos)
+          if horiz then d:line(pos, a, pos, b) else d:line(a, pos, b, pos) end
+        end
         local function ext(it, to)
           local from = it.from or rim
-          if it.from and it.from - 5 * MM > rim then
-            if horiz then
-              d:line(it.pos, from, it.pos, from - 3 * MM); d:line(it.pos, rim, it.pos, to)
-            else
-              d:line(from, it.pos, from - 3 * MM, it.pos); d:line(rim, it.pos, to, it.pos)
-            end
-          elseif horiz then d:line(it.pos, from, it.pos, to)
-          else d:line(from, it.pos, to, it.pos) end
+          if it.from and sgn * (rim - from) > 5 * MM then
+            seg(from, from + sgn * 3 * MM, it.pos); seg(rim, to, it.pos)
+          else
+            seg(from, to, it.pos)
+          end
         end
         if row_mode == 3 then
           -- Kettenmass: Hilfslinien bis zur Masslinie, dann Mass von Punkt zu Punkt
-          for _, it in ipairs(items) do ext(it, edge - 1 * MM) end
+          for _, it in ipairs(items) do ext(it, edge + sgn * 1 * MM) end
           for i = 1, #items - 1 do
             local a, b = items[i], items[i + 1]
             local lab = fmt(b.v - a.v)
@@ -2931,19 +3034,18 @@ function main(script_path)
           it.t = math.max(it.pos, last + step); last = it.t
         end
         for _, it in ipairs(items) do
+          ext(it, edge)
           if horiz then
-            ext(it, edge)
-            d:line(it.pos, edge, it.t, edge - 1.5 * MM)
-            d:text(it.t + 0.35 * fs, edge - 2 * MM, it.lab, fs, true, "right")
+            d:line(it.pos, edge, it.t, edge + sgn * 1.5 * MM)
+            d:text(it.t + 0.35 * fs, edge + sgn * 2 * MM, it.lab, fs, true, (sgn < 0) and "right" or "left")
           else
-            ext(it, edge)
-            d:line(edge, it.pos, edge - 1.5 * MM, it.t)
-            d:text(edge - 2 * MM, it.t - 0.35 * fs, it.lab, fs, false, "right")
+            d:line(edge, it.pos, edge + sgn * 1.5 * MM, it.t)
+            d:text(edge + sgn * 2 * MM, it.t - 0.35 * fs, it.lab, fs, false, (sgn < 0) and "right" or "left")
           end
         end
       end
-      run(odims.xs, true)
-      run(odims.ys, false)
+      run(odims.b, "b"); run(odims.t, "t")
+      run(odims.l, "l"); run(odims.r, "r")
     end
 
     -- Radien an Boegen: alle Boegen; mit "gleiche Radien nur einmal" je Vektor jeder Radius nur 1x
