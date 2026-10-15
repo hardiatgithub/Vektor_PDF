@@ -272,6 +272,37 @@ end
 
 -- Kreis? Aus Boegen oder aus Bezier-Kurven (z. B. importierte Kreise): alle Punkte
 -- gleich weit vom Mittelpunkt, Rahmen quadratisch, keine geraden Stuecke
+-- Langloch (Rechteck mit runden Enden): geschlossen, Boegen mit gleichem Radius, die schmale
+-- Seite = Durchmesser. Fuer die Reihenbemassung zaehlt es wie ein Loch (Mitte des Umrisses).
+local function IsSlot(p, tol)
+  if not p.closed then return false end
+  local pw, ph = p.maxx - p.minx, p.maxy - p.miny
+  local w, L = math.min(pw, ph), math.max(pw, ph)
+  if w <= 2 * tol or L < 1.5 * w then return false end
+  -- a) echte Boegen gleichen Radius, schmale Seite = Durchmesser
+  if #p.arcs >= 2 then
+    local r0, same = p.arcs[1].r, true
+    for _, a in ipairs(p.arcs) do
+      if not a.r or math.abs(a.r - r0) > math.max(tol, 0.02 * r0) then same = false end
+    end
+    if same and math.abs(w - 2 * r0) <= math.max(2 * tol, 0.03 * w) then return true end
+  end
+  -- b) Enden als Polygon angenaehert (z. B. aus anderen Gadgets): keine Ecke des Umrisses ist belegt,
+  --    die Ecken sind "abgerundet"; dazu genug Punkte fuer eine Rundung
+  local n, corner = 0, false
+  local d = 0.1 * w                     -- Rundung bei 45 Grad liegt ~0.15*w vor der Ecke
+  for _, c in ipairs(p.cmds) do
+    local x, y
+    if c[1] == "m" or c[1] == "l" then x, y = c[2], c[3] elseif c[1] == "c" then x, y = c[6], c[7] end
+    if x then
+      n = n + 1
+      if (math.abs(x - p.minx) < d or math.abs(x - p.maxx) < d) and
+         (math.abs(y - p.miny) < d or math.abs(y - p.maxy) < d) then corner = true end
+    end
+  end
+  return (not corner) and n >= 8
+end
+
 local function IsCircle(p, tol)
   local pw, ph = p.maxx - p.minx, p.maxy - p.miny
   if not p.closed or pw <= tol or math.abs(pw - ph) >= 0.01 * pw then return false end
@@ -2735,9 +2766,9 @@ function main(script_path)
           list[#list + 1] = { v = v, o = other, r = r }
         end
         for _, p in ipairs(paths) do                   -- auch Kreise/Linien in Gruppen
-          if row_ref ~= 2 and IsCircle(p, tol) then    -- Lochmitten
-            local cx, cy, r = (p.minx + p.maxx) / 2, (p.miny + p.maxy) / 2, (p.maxx - p.minx) / 2
-            addv(xs, cx, cy, r); addv(ys, cy, cx, r)
+          if row_ref ~= 2 and (IsCircle(p, tol) or IsSlot(p, tol)) then   -- Mitten von Loechern und Langloechern
+            local cx, cy = (p.minx + p.maxx) / 2, (p.miny + p.maxy) / 2
+            addv(xs, cx, cy, (p.maxy - p.miny) / 2); addv(ys, cy, cx, (p.maxx - p.minx) / 2)
           end
           if row_ref ~= 1 and not p.closed then        -- Lage gerader Linien (offene Vektoren)
             for _, sg in ipairs(p.segs) do
@@ -2865,6 +2896,12 @@ function main(script_path)
           end
         end
         if #items > 1 and math.abs(items[2].pos - items[1].pos) < 0.01 then table.remove(items, 1) end
+        -- Ende (rechte bzw. obere Kante der Zeichnung) mitnehmen, damit die Kette geschlossen ist
+        local vend = horiz and vmaxx or vmaxy
+        local pend = horiz and tx(vmaxx) or ty(vmaxy)
+        if math.abs(items[#items].pos - pend) > 0.01 then
+          items[#items + 1] = { pos = pend, v = vend, lab = fmt(vend - (horiz and vminx or vminy)), from = nil }
+        end
         local edge = horiz and odims.ax or odims.ay
         -- Hilfslinie vom Punkt bis 'to', unterbrochen: kurzes Stueck am Loch/an der Linie, dann erst ab dem Umriss
         local rim = horiz and (ty(vminy) - gap) or (tx(vminx) - gap)

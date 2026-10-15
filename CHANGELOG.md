@@ -19,6 +19,9 @@ Neueste Version steht oben.
     (der frühere Zustand „Auto aus + Vectric aus“ wird beim ersten Start zu diesem Haken).
   - Rechts der Knopf **„Auto-Einstellungen ►“** öffnet ein neu geordnetes Menü: eine Zeile je Maßart, „innen“ in einer
     eigenen Spalte, „Einzelmaße ab“ unten abgesetzt. Ausgegraut, wenn die Autobemaßung nicht aktiv ist.
+- **Reihenbemaßung: Langlöcher und Ende** – Langlöcher (Rechteck mit runden Enden, auch mit als Polygon angenäherten
+  Enden wie die Lamello-Nuten aus „Korpusbearbeitung“) zählen wie Löcher und werden über ihre Mitte bemaßt; die Reihe läuft jetzt bis zur rechten bzw. oberen Kante der Zeichnung, damit die Kette
+  geschlossen ist (z. B. 429 · 431 statt nur 429).
 - **Einzelmaße außen** (Menü Auto-Einstellungen, „Jeder Vektor“ → *außen*): alle Einzelmaße außerhalb der ganzen
   Zeichnung – Breiten vorne (unten), Höhen links, mit Hilfslinien vom jeweiligen Teil; mehrere Maße stapeln sich
   in eigenen Spuren, das Gesamtmaß liegt ganz außen. Schließt sich mit *innen* aus. Gilt auch für Gruppen „als Ganzes“.
