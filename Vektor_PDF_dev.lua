@@ -630,10 +630,12 @@ local snap_verts = nil              -- Fangpunkte aller Vektoren (einmal je Lauf
 local snap_segs = nil               -- gerade Stuecke aller Vektoren (fuer schmale Masse)
 local snap_arcs = nil               -- Kreisboegen aller Vektoren (fuer Radius-Masse)
 local snap_knots = nil              -- Knoten aller Vektoren (Ecken, Bogen-Enden) fuer schraege Masse
+local snap_corners = nil            -- echte Ecken des Umrisses je geschlossenem Vektor (fuer Diagonalmasse)
 
 local function SnapVerts(job, in_mm)
   if snap_verts then return snap_verts end
   snap_verts, snap_segs, snap_arcs, snap_knots = {}, {}, {}, {}
+  snap_corners = {}
   pcall(function()
     local lm = job.LayerManager
     local lpos = lm:GetHeadPosition()
@@ -665,6 +667,17 @@ local function SnapVerts(job, in_mm)
                 elseif cmd[1] == "h" and sx then snap_segs[#snap_segs + 1] = { lx, ly, sx, sy } end
               end
               for _, k in ipairs(p.knots) do snap_knots[#snap_knots + 1] = k end
+              -- Ecken des Rahmens dieses Vektors, an denen wirklich ein Knoten liegt
+              if p.closed then
+                local e = 1e-6 * math.max(1, p.maxx - p.minx, p.maxy - p.miny)
+                for _, c in ipairs({ { p.minx, p.miny }, { p.maxx, p.miny }, { p.minx, p.maxy }, { p.maxx, p.maxy } }) do
+                  for _, k in ipairs(p.knots) do
+                    if math.abs(k[1] - c[1]) <= e and math.abs(k[2] - c[2]) <= e then
+                      snap_corners[#snap_corners + 1] = { c[1], c[2] }; break
+                    end
+                  end
+                end
+              end
               -- Kreisboegen: genaue Extrempunkte (0/90/180/270 Grad) als Fangpunkte
               for _, a in ipairs(p.arcs) do
                 snap_arcs[#snap_arcs + 1] = a
@@ -945,6 +958,43 @@ local function VectricDimLine(job, obj, in_mm, known_k)
           if i > 1 and math.abs(hi - cuts[i] - known_k) < eps then
             return Make(hz, cuts[i - 1], cuts[i], c), nil
           end
+        end
+      end
+    end
+    -- 3c) Diagonale von Ecke zu Ecke eines Teils (z. B. Diagonalmass eines Deckels): Messpunkte sind echte
+    --     Ecken eines Umrisses nahe zwei gegenueberliegenden Rahmenecken. Welche der beiden Diagonalen:
+    --     Vectric versetzt die Masslinie nur senkrecht zur Messrichtung -> die Rahmenmitte liegt
+    --     gegenueber der Strecke nur quer verschoben (Verschiebung laengs der Strecke ~ 0).
+    do
+      local m = math.max(4 * tol, 0.04 * math.max(w, h))
+      if w > 3 * m and h > 3 * m and snap_corners and #snap_corners > 0 then
+        local function near(cx, cy)
+          local out = {}
+          for _, q in ipairs(snap_corners) do
+            if math.abs(q[1] - cx) <= m and math.abs(q[2] - cy) <= m then out[#out + 1] = q end
+          end
+          return out
+        end
+        local bcx, bcy = (x0 + x1) / 2, (y0 + y1) / 2
+        local pick, ps = nil, math.huge
+        for _, c in ipairs({ { x0, y1, x1, y0 }, { x0, y0, x1, y1 } }) do
+          for _, a in ipairs(near(c[1], c[2])) do
+            for _, b in ipairs(near(c[3], c[4])) do
+              local ux, uy = b[1] - a[1], b[2] - a[2]
+              local L = math.sqrt(ux * ux + uy * uy)
+              if L > 3 * m then
+                local sx, sy = bcx - (a[1] + b[1]) / 2, bcy - (a[2] + b[2]) / 2
+                local along = math.abs(sx * ux + sy * uy) / L
+                local across = math.abs(sx * uy - sy * ux) / L
+                local sc = along + 0.05 * across
+                if sc < ps then pick, ps = { a, b }, sc end
+              end
+            end
+          end
+        end
+        if pick and ps < m then
+          local a, b = pick[1], pick[2]
+          return { a[1], a[2], b[1], b[2], p1 = { a[1], a[2] }, p2 = { b[1], b[2] }, diag = true }
         end
       end
     end

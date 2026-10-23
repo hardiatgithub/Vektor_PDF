@@ -19,6 +19,11 @@ Neueste Version steht oben.
     (der frühere Zustand „Auto aus + Vectric aus“ wird beim ersten Start zu diesem Haken).
   - Rechts der Knopf **„Auto-Einstellungen ►“** öffnet ein neu geordnetes Menü: eine Zeile je Maßart, „innen“ in einer
     eigenen Spalte, „Einzelmaße ab“ unten abgesetzt. Ausgegraut, wenn die Autobemaßung nicht aktiv ist.
+- **Behoben: Vectric-Diagonalmaß von Ecke zu Ecke** (z. B. Diagonale eines Deckels) wurde falsch erkannt – das Gadget
+  suchte ein parallel versetztes Maß mit Hilfslinien und nahm Punkte eines anderen Teils (296 statt 390,51). Jetzt wird
+  zuerst geprüft, ob nahe zwei gegenüberliegenden Ecken des Bemaßungsrahmens echte Ecken eines Umrisses liegen
+  (keine Punkte versetzter Werkzeugweg-Konturen). Welche Diagonale: Vectric versetzt die Maßlinie nur quer zur
+  Messrichtung, also passt die Diagonale, gegen die der Rahmen nur seitlich verschoben ist.
 - **Reihenbemaßung „je Teil“** (Haken neben „Bohrungen nur unten / links“): jedes Teil – ein geschlossener Umriss, der
   in keinem anderen liegt – bekommt seine eigene Reihe ab seiner linken unteren Ecke, direkt am Teil (mit Aufteilung
   oben/unten, links/rechts innerhalb des Teils). Die Einzelmaße des Teils rücken nach außen. Ohne Haken wie bisher.
