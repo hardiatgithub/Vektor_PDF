@@ -2,75 +2,93 @@
 
 *[English version](README.md)*
 
-Gadget für **Vectric VCarve Pro / Aspire** (ab V12), das Vektoren als **PDF-Zeichnung** exportiert – mit einstellbarer Linienstärke, automatischer Bemaßung, Titel und Maßstabsangabe.
+Gadget für **Vectric VCarve Pro / Aspire** (ab V12), das Vektoren als gut lesbare **PDF-Zeichnung** exportiert – zum Ausdrucken für die Werkstatt, als maßstäbliche Vorlage oder als bemaßte Skizze für Kunden.
+
+## Warum dieses Gadget?
+
+Der Ausdruck direkt aus VCarve hat extrem dünne Linien und ist in der Werkstatt kaum zu lesen. Vektor_PDF druckt die Zeichnung mit einstellbarer Linienstärke, übernimmt die in VCarve gesetzten Maße gut lesbar und kann bei Bedarf selbst bemaßen.
 
 ## Funktionen
 
-- Export von **ausgewählten Vektoren** oder **allen sichtbaren Ebenen** (inkl. Gruppen)
+**Zeichnung**
+
+- Export von **ausgewählten Vektoren**, **allen sichtbaren Layern** oder **gewählten Layern** (inkl. Gruppen)
 - Jobs mit **mehreren Seiten (Sheets)**: aktuelle Seite oder alle Seiten als **mehrseitiges PDF**
-- Linien, Bögen und Bézierkurven werden als echte Vektoren ins PDF geschrieben
-- **Linienstärke** und **Farbe** der Vektoren einstellbar (z. B. 0,3 fein · 0,5 normal · 1,0 kräftig)
-- **Automatische Bemaßung**
-  - Gesamtmaße (Breite × Höhe)
-  - optional Maße jedes geschlossenen Vektors, Kreise als Durchmesser (Ø)
-  - Einzelmaße erst ab einer Mindestgröße (z. B. keine Maße an Buchstaben)
-  - Farbe, Linienstärke und Pfeilgröße der Bemaßung wählbar
-  - optional Radien an Bögen (R …)
-  - optional Winkel an Ecken zwischen zwei Geraden (rechte Winkel werden ausgelassen)
-  - **manuelle Maße und Winkel** über einen eigenen Layer (siehe unten)
-- **Titel** und **Notiz** oben auf dem Blatt
-- **Maßstab, Einheit (mm/Zoll) und Datum** in der Fußzeile
-- Seitenformat: **auf A4 einpassen** (Hoch-/Querformat automatisch) oder **Maßstab 1:1**
+- Linien, Bögen und Bézierkurven als echte Vektoren im PDF
+- **Linienstärke** einstellbar, Farbe fest oder **wie in VCarve** (Farbe des Layers)
 - Materialumriss optional grau mitdrucken
-- Dialog, Meldungen und PDF-Fußzeile wahlweise auf **Deutsch oder Englisch**
-- Einstellungen werden zwischen den Aufrufen gespeichert
+
+**Bemaßung** – alle Arten unabhängig voneinander ein- und ausschaltbar
+
+- **Vectric-Bemaßung:** Maße, die du in VCarve gesetzt hast (waagrecht, senkrecht, schräg, Radien, Winkel), werden gut lesbar ins PDF übernommen – gesteuert über die Layer in VCarve
+- **Auto-Bemaßung** (Schieber *Vectric · beide · Auto*, Menü „Auto-Einstellungen ►“):
+  - Gesamtmaße, Maße jedes Vektors, Kreise (R), Radien an Bögen, Winkel an Ecken
+  - jeweils wahlweise **innen** (durchs Teil) oder **außen** (vor der Zeichnung, mit unterbrochenen Hilfslinien)
+  - Gruppen auslassen, als Ganzes oder einzeln bemaßen
+  - Einzelmaße erst ab einer Mindestgröße (z. B. keine Maße an Buchstaben)
+- **Reihenbemaßung** für Lochreihen, Langlöcher (z. B. Lamello) und Rasterlinien:
+  - *steigend* (ab 0) oder als *Kette*
+  - Bezug: Löcher, Linien oder beide
+  - Aufteilung nach Seiten, Bohrungen nur unten/links, wahlweise **je Teil**
+- Maßzahl in der Maßlinie (wie Vectric) oder darüber; Farbe, Linienstärke, Pfeil- und Schriftgröße einstellbar
+- Schriftgröße optional mit dem Maßstab skalieren
+- Maße weichen einander automatisch aus; doppelte Maße werden weggelassen
+
+**Seite und Beschriftung**
+
+- Papier **A4** oder **US Letter**, Hoch-/Querformat oder automatisch
+- **Einpassen**, **1:1** oder **frei wählbarer Maßstab** (z. B. 1:5, 1:7,5, 2:1)
+- **Titel** und **Notiz** oben, **Maßstab, Einheit (mm/Zoll) und Datum** in der Fußzeile
+- **Speichern unter** direkt im Dialog (leeres Feld = beim Export nachfragen)
+- Dialog, Meldungen und PDF auf **Deutsch oder Englisch**
+- Alle Einstellungen werden gemerkt
 
 ## Installation
 
-1. Den Ordner `Vektor_PDF` mit den Dateien
-   - `Vektor_PDF.lua`
-   - `Vektor_PDF.htm`
+**Empfohlen:** `Vektor_PDF.vgadget` aus dem
+[neuesten Release](https://github.com/hardiatgithub/Vektor_PDF/releases) herunterladen,
+in VCarve / Aspire über **Gadgets → Install Gadget…** installieren und die Software neu starten.
+Das Gadget erscheint dann unter **Gadgets → Vektor_PDF**.
 
-   in den öffentlichen Gadget-Ordner von Vectric kopieren, z. B.:
+**Manuell:** den Ordner `Vektor_PDF` mit `Vektor_PDF.lua` und `Vektor_PDF.htm` in den öffentlichen Gadget-Ordner kopieren, z. B.:
 
-   ```
-   C:\Users\Public\Documents\Vectric Files\Gadgets\VCarve Pro V12.5\Vektor_PDF\
-   ```
+```
+C:\Users\Public\Documents\Vectric Files\Gadgets\VCarve Pro V12.5\Vektor_PDF\
+```
 
-   (Programmname und Version ggf. anpassen, z. B. `Aspire V12.5`.)
-   Der Ordner `C:\ProgramData\Vectric\...\Gadgets` ist für die mitgelieferten
-   Vectric-Gadgets gedacht.
+(Programmname und Version ggf. anpassen, z. B. `Aspire V12.5`) und neu starten.
 
-2. Vectric neu starten. Das Gadget erscheint im Menü **Gadgets → Vektor_PDF**.
-
-> Wichtig: Ordnername und Name der `.lua`-Datei müssen gleich sein (`Vektor_PDF`).
+> Ordnername und Name der `.lua`-Datei müssen gleich sein (`Vektor_PDF`).
 
 ## Verwendung
 
 1. Job öffnen und – falls gewünscht – Vektoren auswählen.
 2. **Gadgets → Vektor_PDF** starten.
-3. Linienstärke, Bemaßung, Beschriftung und Seitenformat einstellen.
-4. Mit **OK** bestätigen und Speicherort für die PDF-Datei wählen.
+3. Linien, Bemaßung, Beschriftung und Seite einstellen.
+4. Mit **OK** bestätigen – das PDF wird unter „Speichern unter“ gespeichert (oder es wird nachgefragt).
 
-## Manuelle Maße
+## Tipp zu den Bemaßungen
 
-Für Maße, die das Gadget nicht automatisch erzeugt (z. B. Abstand zwischen zwei Teilen):
+Nach der Installation ist nur die **Vectric-Bemaßung** aktiv – das Gadget übernimmt also die Maße, die du **selbst in VCarve gesetzt hast**. Hast du keine Maße gezeichnet, erscheinen auch keine im PDF; dann einfach die Auto-Bemaßung zuschalten.
 
-1. In VCarve einen Layer **„Bemassung“** anlegen (Name im Dialog unter „Maß-Layer“ änderbar).
-2. Auf diesem Layer eine **Linie** von Punkt zu Punkt zeichnen – am besten mit Fangen an den Kanten.
-3. Das Gadget druckt die Linie nicht als Vektor, sondern als **Maß** mit Pfeilen und Länge
-   (waagrecht, senkrecht oder schräg – je nach Richtung der Linie).
-
-**Winkel:** Eine Linie mit **drei Punkten** in V-Form entlang der beiden Kanten zeichnen – der
-mittlere Punkt ist die Ecke (Scheitel). Das Gadget druckt einen Bogen mit Pfeilen und dem Winkel, z. B. `45°`.
-
-Sollen die manuellen Maße nicht gedruckt werden, im Dialog neben „Maß-Layer“ **ausblenden**
-ankreuzen (oder den Layer in VCarve ausblenden).
+Weniger ist oft mehr: Wer alles gleichzeitig aktiviert, bekommt schnell eine überladene Zeichnung. Die Reihenbemaßung ist eher für spezielle Fälle gedacht, etwa Lochreihen oder Bohrbilder im Möbelbau.
 
 ## Hinweise
 
-- Vectric-eigene Texte und Bemaßungen haben keine Vektorform und werden übersprungen – die Maße erzeugt das Gadget selbst.
+- Vectric-Texte haben keine Vektorform und werden übersprungen – für das PDF in Kurven umwandeln.
+- Bei jedem Export schreibt das Gadget `vdim_diag.txt` in den Gadget-Ordner. Die Datei hilft beim Nachvollziehen, warum ein Vectric-Maß fehlt.
 - Die PDF verwendet die Standardschrift Helvetica; Umlaute und Sonderzeichen (ä, ö, ü, ß, Ø) werden unterstützt.
+- Entwickelt und getestet mit **VCarve Pro V12.5** unter Windows.
+
+## Danke
+
+Ein großes Dankeschön an **Gremlin** (gremlin529), der mit vielen hilfreichen Tipps, Tests und Ideen zur Seite steht.
+
+## Feedback
+
+Fehler gefunden oder eine Idee? Bitte ein [Issue](https://github.com/hardiatgithub/Vektor_PDF/issues) anlegen.
+
+Alle Änderungen stehen im [CHANGELOG](CHANGELOG.md).
 
 ## Lizenz
 
