@@ -98,20 +98,40 @@ else {
     }
 }
 
+# Suggest the next subversion: a trailing number is counted up (beta.6 -> beta.7, rc2 -> rc3)
+function Get-NextSubversion {
+    param ([string]$sub)
+    if ($sub -match '^(.*?)(\d+)$') {
+        return $Matches[1] + ([int]$Matches[2] + 1)
+    }
+    return $sub
+}
+
 if ($subversion) {
     Write-Host "Subversion provided as argument: $subversion"
+    if ($subversion -eq "-") { $subversion = "" }    # "-" = no subversion (final release)
 }
 else {
-    # Prompt user for subversion string - this is optional, press Enter to reuse
-    # the last one used (if any), or to leave it empty if there wasn't one
+    # Prompt user for subversion string - Enter takes the suggested next value,
+    # "-" leaves it empty (final release without beta/rc)
     if ($lastSubversion) {
-        $subversionInput = Read-Host "Enter the subversion string, or press Enter to reuse the last value (e.g., beta1, rc2) [$lastSubversion]"
-        $subversion = if ([string]::IsNullOrWhiteSpace($subversionInput)) { $lastSubversion } else { $subversionInput }
+        $suggested = Get-NextSubversion $lastSubversion
+        $subversionInput = Read-Host "Enter the subversion string (Enter = $suggested, '-' = none / final release) [$suggested]"
+        if ([string]::IsNullOrWhiteSpace($subversionInput)) { $subversion = $suggested }
+        elseif ($subversionInput.Trim() -eq "-") { $subversion = "" }
+        else { $subversion = $subversionInput.Trim() }
     }
     else {
-        $subversion = Read-Host "Enter the subversion string, or press Enter to leave empty (e.g., beta1, rc2)"
+        $subversionInput = Read-Host "Enter the subversion string, or press Enter to leave empty (e.g., beta.1, rc.1)"
+        $subversion = if ([string]::IsNullOrWhiteSpace($subversionInput) -or $subversionInput.Trim() -eq "-") { "" } else { $subversionInput.Trim() }
     }
 }
+
+# Show the resulting release name before anything is created
+$fullVersion = if ($subversion) { "$version-$subversion" } else { $version }
+Write-Host ""
+Write-Host "Creating release: $moduleToCreate $fullVersion"
+Write-Host ""
 
 Save-ReleaseVer -filePath $releaseVerFile -version $version -subversion $subversion
 
@@ -285,4 +305,4 @@ try {
 }
 catch {
     Write-Error "An error occurred: $_"
-}
+}
