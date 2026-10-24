@@ -11,6 +11,11 @@ Neueste Version steht oben.
   Der Stand mit dieser Funktion ist im Branch **`individ_bem`** gesichert und kann später wieder übernommen werden.
   Vectric-Bemaßungen und Autobemaßung funktionieren unverändert.
 
+### Geändert
+- **Grundeinstellung bei Neuinstallation:** Der Bemaßungs-Regler steht jetzt auf **„nur Vectric“**, die Autobemaßung ist aus.
+  Reihenbemaßung, Einzelmaße, Radien, Winkel und Polygone sind wie bisher aus. So ist die Zeichnung anfangs nicht überladen;
+  Auto- und Reihenbemaßung lassen sich bei Bedarf zuschalten. Bereits gespeicherte Einstellungen bleiben unverändert.
+
 ### Neu (nach beta.4)
 - **Bemaßungs-Regler** (Bereich „Bemaßung“): ein Schieber mit drei Stufen *Vectric · beide · Auto* ersetzt die Haken
   „Autobemaßung“ und „Vectric-Bemaßung aus“ (ziehen oder auf die Stufe klicken).

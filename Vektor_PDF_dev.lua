@@ -2004,11 +2004,11 @@ function main(script_path)
   dialog:AddTextField("LayerSel", reg:GetString("LayerSel", ""))
   dialog:AddRadioGroup("SheetMode", reg:GetInt("SheetMode", 1))
   dialog:AddCheckBox("DrawBorder", reg:GetBool("DrawBorder", false))
-  dialog:AddCheckBox("DimAuto", reg:GetBool("DimAuto", true))
+  dialog:AddCheckBox("DimAuto", reg:GetBool("DimAuto", false))   -- Grundwert: nur Vectric-Bemassung (Auto aus)
   dialog:AddCheckBox("VDimOff", reg:GetBool("VDimOff", false))
   -- Haken "Bemassung" (an = Vectric-/Autobemassung ins PDF); frueher umgekehrt "Bemassung ausblenden" (DimHide),
   -- davor Auto aus + Vectric aus
-  local old_hide = reg:GetBool("DimHide", (not reg:GetBool("DimAuto", true)) and reg:GetBool("VDimOff", false))
+  local old_hide = reg:GetBool("DimHide", (not reg:GetBool("DimAuto", false)) and reg:GetBool("VDimOff", false))
   dialog:AddCheckBox("DimOn", reg:GetBool("DimOn", not old_hide))
   dialog:AddCheckBox("DimOverall", reg:GetBool("DimOverall", true))
   dialog:AddCheckBox("DimOverallIn", reg:GetBool("DimOverallIn", false))
