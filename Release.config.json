@@ -3,6 +3,7 @@
     "MainLuaFile": "Vektor_PDF_dev.lua",
     "MainHTMLFile": "Vektor_PDF_dev.htm",
     "AppendVersionToFileNames": false,
-    "FilesToRelease": [
-    ]
+    "VersionInGadgetName": true,
+    "CopyToFolder": "..\\Releases",
+    "FilesToRelease": []
 }

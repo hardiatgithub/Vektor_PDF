@@ -52,6 +52,17 @@ if ($null -ne $config.AppendVersionToFileNames) {
     }
 }
 
+# Name of the .vgadget only (independent of the files inside):
+# Config field "VersionInGadgetName": true names it <ModuleToCreate>_<version>[-<subversion>].vgadget,
+# so you always see which version is packed, even if the lua/htm inside keep their plain names.
+$versionInGadgetName = $false
+if ($null -ne $config.VersionInGadgetName) {
+    if ($config.VersionInGadgetName -is [bool]) { $versionInGadgetName = $config.VersionInGadgetName }
+    elseif ("$($config.VersionInGadgetName)" -match "^(true|1|yes)$") { $versionInGadgetName = $true }
+}
+# Optional folder (relative to this script) where a copy of the finished .vgadget is placed, e.g. "..\Releases"
+$copyToFolder = $config.CopyToFolder
+
 # manually add extra files here (in the config file), but it will automatically include the main lua
 # and html file based on the config above, so no need to add those to FilesToRelease
 $filesToRelease = @($mainLuaFile, $mainHTMLFile) + @($config.FilesToRelease)
@@ -244,7 +255,10 @@ try {
 
     write-Host ""
 
-    if (Test-Path $luaFile) {
+    if ((Split-Path $luaFile -Leaf) -eq ($releaseName + ".lua")) {
+        Write-Host "'$mainLuaFile' already has the release name (no rename needed)."
+    }
+    elseif (Test-Path $luaFile) {
         if (Test-Path $luaFileVersioned) {  
             Remove-Item $luaFileVersioned -Force
         }
@@ -257,7 +271,10 @@ try {
 
     $htmlFile = Join-Path $versionDir $mainHTMLFile    
     $htmlFileVersioned = Join-Path $versionDir ($releaseName + ".htm")
-    if (Test-Path $htmlFile) {
+    if ((Split-Path $htmlFile -Leaf) -eq ($releaseName + ".htm")) {
+        Write-Host "'$mainHTMLFile' already has the release name (no rename needed)."
+    }
+    elseif (Test-Path $htmlFile) {
         if (Test-Path $htmlFileVersioned) {  
             Remove-Item $htmlFileVersioned -Force
         }
@@ -287,13 +304,18 @@ try {
     Compress-Archive -Path (Join-Path $releasePath "*") -DestinationPath $zipPath -Force
 
     #Rename the zip file with a .vgadget extension
-    $vgadgetPath = Join-Path $releaseDir ($releaseName + ".vgadget")
+    $gadgetName = $releaseName
+    if ($versionInGadgetName -and -not $appendVersionToFileNames) {
+        $gadgetName = $moduleToCreate + "_" + $version
+        if ($subversion) { $gadgetName = $gadgetName + "-" + $subversion }
+    }
+    $vgadgetPath = Join-Path $releaseDir ($gadgetName + ".vgadget")
     Write-Debug "Renaming ZIP file to '$vgadgetPath'..." 
     if (Test-Path $vgadgetPath) {
         Write-Host "Versioned gadget file already exists: $vgadgetPath. Removing old versioned gadget file..."
         Remove-Item $vgadgetPath -Force
     }
-    Rename-Item -Path $zipPath -NewName ($releaseName + ".vgadget") -Force
+    Rename-Item -Path $zipPath -NewName ($gadgetName + ".vgadget") -Force
 
     #remove the version directory after creating the zip
     Write-Host "Removing temporary version directory '$releasePath'..."  
@@ -301,6 +323,12 @@ try {
     Write-Host ""
     Write-Host ""
     Write-Host "Release created successfully: $vgadgetPath"
+    if ($copyToFolder) {
+        $copyDir = Join-Path $PSScriptRoot $copyToFolder
+        if (-not (Test-Path $copyDir)) { New-Item -ItemType Directory -Path $copyDir | Out-Null }
+        Copy-Item -Path $vgadgetPath -Destination $copyDir -Force
+        Write-Host "Copied to: $(Join-Path $copyDir ($gadgetName + '.vgadget'))"
+    }
     Write-Host ""
 }
 catch {
