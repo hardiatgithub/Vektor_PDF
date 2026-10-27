@@ -5,6 +5,11 @@ Neueste Version steht oben.
 
 ## [Unveröffentlicht]
 
+### Behoben
+- **Seiten-Diagnose ohne Grund:** Lag alles Exportierte auf nur einer Seite (z. B. nur Layer „Korpus Skizze“ gewählt),
+  erschien trotzdem die Seiten-Diagnose. Sie kommt jetzt nur noch, wenn die Seiten wirklich nicht erkannt werden.
+  Die Seitenliste darin hat Zeilenumbrüche (3 Seiten je Zeile), statt das Meldungsfenster zu sprengen.
+
 ### Entfernt
 - **Individuelle Bemaßung** wieder ausgebaut (Schalter, Layerfeld, Knopf „Layer anlegen“ und Anleitung im Dialog;
   Hilfslinien auf dem Layer „pdf_dim“ werden nicht mehr als Maße gedruckt, der Layer wird nicht mehr angelegt).

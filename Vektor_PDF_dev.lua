@@ -18,6 +18,29 @@ local function VersionText()
   return G_version
 end
 
+-- Meldungsfenster: VCarve bricht lange Zeilen nicht selbst um -> zu lange Zeilen hier umbrechen
+-- (bei Leerzeichen, Komma oder \ /, sonst hart nach MSG_WRAP Zeichen)
+local MSG_WRAP = 100
+local function WrapText(s, n)
+  local out = {}
+  for ln in (tostring(s) .. "\n"):gmatch("(.-)\n") do
+    local line = ln
+    while #line > n do
+      local cut = nil
+      for i = n, math.floor(n / 2), -1 do
+        local ch = line:sub(i, i)
+        if ch == " " or ch == "," or ch == "\\" or ch == "/" then cut = i; break end
+      end
+      cut = cut or n
+      out[#out + 1] = (line:sub(1, cut):gsub("%s+$", ""))
+      line = line:sub(cut + 1):gsub("^%s+", "")
+    end
+    out[#out + 1] = line
+  end
+  return table.concat(out, "\n")
+end
+local function DisplayMessageBox(msg) return _G.DisplayMessageBox(WrapText(msg, MSG_WRAP)) end
+
 local atan2 = math.atan2 or math.atan
 local MM = 72 / 25.4            -- Punkte je mm (PDF-Einheit)
 local EXT_GAP = 2 * MM          -- Abstand der Masshilfslinien zum Bauteil
@@ -3442,14 +3465,18 @@ function main(script_path)
       sheet_method = "ActiveSheetId"
     end
   end
-  -- Diagnose, falls der Job mehrere Seiten hat, sie aber nicht getrennt werden konnten
+  -- Diagnose, falls der Job mehrere Seiten hat, sie aber nicht getrennt werden konnten.
+  -- Liefern die Objekte ihre Seite (sheet_method gesetzt), liegt das Exportierte wirklich nur auf
+  -- einer Seite (z. B. Layer-Filter) -> keine Diagnose.
   local sheet_diag = nil
-  if not selected_only and (#sheet_list > 1 or sheet_mode == 2) and #keys <= 1 then
+  if not selected_only and (#sheet_list > 1 or sheet_mode == 2) and #keys <= 1 and sheet_method == nil then
     local ids = {}
-    for _, sh in ipairs(sheet_list) do ids[#ids + 1] = tostring(sh.key) .. "=" .. tostring(sh.name) end
+    for i, sh in ipairs(sheet_list) do
+      ids[#ids + 1] = ((i > 1 and (i - 1) % 3 == 0) and "\n" or "") .. tostring(sh.key) .. "=" .. tostring(sh.name)
+    end
     sheet_diag = T("\n\n--- Seiten-Diagnose (bitte Screenshot senden) ---\n",
                    "\n\n--- Sheet diagnostics (please send a screenshot) ---\n") ..
-                 #sheet_list .. T(" Seiten: ", " sheets: ") .. table.concat(ids, ", ") ..
+                 #sheet_list .. T(" Seiten:\n", " sheets:\n") .. table.concat(ids, ", ") ..
                  T("\naktiv: ", "\nactive: ") .. tostring(active_key) ..
                  T("\nSeite je Objekt: ", "\nsheet per object: ") .. tostring(sheet_method) ..
                  (keys[1] ~= nil and (" (" .. tostring(keys[1]) .. ")") or "") ..
