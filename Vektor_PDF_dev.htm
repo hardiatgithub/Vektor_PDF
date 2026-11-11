@@ -47,6 +47,11 @@
   .vhint { font-size: 1em; color: #333; margin: 0 0 0.4em 0; }
   .layers label { white-space: nowrap; margin-right: 0.9em; }
   .layers.dim { color: #999; }
+  .stymenu { border: 1px solid #ccc; background: #fafafa; padding: 0.3em 0.6em; margin: 0.3em 0 0.2em 0; }
+  .stytab { width: auto; }
+  .stytab th { text-align: left; font-weight: normal; color: #666; font-size: 0.92em; padding: 0 0.33em 0.2em 0.33em; }
+  .stytab select { width: 15em; }
+  .stytab td.set { font-weight: bold; }
 
   /* ---------- Farbschema ----------
      Nur Farben, Rahmen, Rundungen und Schatten -- Schriftgroessen und Abstaende
@@ -154,7 +159,15 @@
       <span class="hint t" data-en="&nbsp;0.3 fine · 0.5 normal · 1.0 bold">&nbsp;0,3 fein · 0,5 normal · 1,0 kräftig</span></td></tr>
     <tr><td><span class="t" data-en="Colour:">Farbe:</span></td><td>
       <span class="hint t" data-en="as in VCarve (colour of the layer)">wie in VCarve (Farbe des Layers)</span></td></tr>
+    <tr><td><span class="t" data-en="Per layer:">Je Layer:</span></td><td>
+      <a href="#" id="StyleBtn" class="abtn" onclick="toggleMenu('StyleMenu', 'StyleArrow'); return false;" title="Strichart und Linienstärke für einzelne Layer festlegen" data-title-en="Set line type and line width for individual layers"><span class="t" data-en="Line types">Linienarten</span> <span id="StyleArrow">&#9658;</span></a>
+      <span class="hint" id="StyleInfo"></span></td></tr>
   </table>
+  <div id="StyleMenu" class="stymenu" style="display:none">
+    <div id="StyleBox"></div>
+    <span class="hint t" data-en="Width empty = line width from above. Remembered by layer name.">Stärke leer = Linienstärke von oben. Wird je Layername gemerkt.</span>
+  </div>
+  <input type="text" id="LayerStyle" style="display:none">
 </fieldset>
 
 <fieldset class="s-vectors">
@@ -320,6 +333,7 @@
     </select>
     <span id="ZoomInfo"></span>
   </span>
+  <input class="LuaButton" id="PreviewPdf" style="width: 6.7em; margin-left: 6px;" type="button" value="Vorschau" data-en="Preview" title="PDF mit den aktuellen Einstellungen erzeugen und anzeigen – der Dialog bleibt offen" data-title-en="Create and show the PDF with the current settings – the dialog stays open">
   <input id="ButtonOK" class="FormButton" type="button" value="OK">
   <input id="ButtonCancel" class="FormButton" type="button" value="Abbrechen" data-en="Cancel">
 </div>
@@ -354,10 +368,13 @@ function syncLang() {
     if (tp.getAttribute("data-title-de") == null) tp.setAttribute("data-title-de", tp.title);
     tp.title = (lang == "2") ? tp.getAttribute("data-title-en") : tp.getAttribute("data-title-de");
   }
-  var cancel = document.getElementById("ButtonCancel");
-  if (cancel) {
-    if (cancel.getAttribute("data-de") == null) cancel.setAttribute("data-de", cancel.value);
-    cancel.value = (lang == "2") ? cancel.getAttribute("data-en") : cancel.getAttribute("data-de");
+  var btns = ["ButtonCancel", "PreviewPdf"];
+  for (var bi = 0; bi < btns.length; bi++) {
+    var cancel = document.getElementById(btns[bi]);
+    if (cancel) {
+      if (cancel.getAttribute("data-de") == null) cancel.setAttribute("data-de", cancel.value);
+      cancel.value = (lang == "2") ? cancel.getAttribute("data-en") : cancel.getAttribute("data-de");
+    }
   }
   if (!first) applyZoom(true);           // Textlaengen haben sich geaendert
 }
@@ -503,6 +520,98 @@ function saveLayers() {
   // Layer anklicken waehlt automatisch "Gewaehlte Layer"
   var r = document.getElementsByName("Source");
   for (var k = 0; k < r.length; k++) if (r[k].value == "3") r[k].checked = true;
+}
+// Linienart und Staerke je Layer: Feld "LayerStyle" = "Name=Art:Staerke|Name=Art:Staerke"
+// (Art 1 durchgezogen, 2 gestrichelt, 3 strichpunktiert, 4 gepunktet, 5 Strich-Zweipunkt; Staerke leer = Standard).
+// Eintraege von Layern, die es in dieser Zeichnung nicht gibt, bleiben erhalten.
+var STY_DE = ["\u2500\u2500\u2500\u2500\u2500  durchgezogen", "\u2013 \u2013 \u2013 \u2013  gestrichelt", "\u2500 \u00b7 \u2500 \u00b7  strichpunktiert", "\u00b7 \u00b7 \u00b7 \u00b7 \u00b7  gepunktet", "\u2500 \u00b7 \u00b7 \u2500  Strich-Zweipunkt"];
+var STY_EN = ["\u2500\u2500\u2500\u2500\u2500  solid", "\u2013 \u2013 \u2013 \u2013  dashed", "\u2500 \u00b7 \u2500 \u00b7  dash-dot", "\u00b7 \u00b7 \u00b7 \u00b7 \u00b7  dotted", "\u2500 \u00b7 \u00b7 \u2500  dash-double-dot"];
+var stylesLang = "", stylesTouched = false, styleNames = [], stylesShown = null;
+function styleMap() {
+  var f = document.getElementById("LayerStyle"), map = {}, order = [];
+  if (!f || f.value == "") return { map: map, order: order };
+  var e = f.value.split("|");
+  for (var i = 0; i < e.length; i++) {
+    var m = /^(.*)=(\d):([\d.,]*)$/.exec(e[i]);
+    if (m && m[1] != "") { if (!map.hasOwnProperty(m[1])) order.push(m[1]); map[m[1]] = { k: m[2], w: m[3] }; }
+  }
+  return { map: map, order: order };
+}
+function styleInfo(n) {
+  var el = document.getElementById("StyleInfo");
+  if (!el) return;
+  var en = (currentLang() == "2");
+  el.innerHTML = n > 0 ? ("&nbsp;" + n + (en ? " layer(s) with own setting" : " Layer mit eigener Einstellung")) : "";
+}
+function applyStyles() {
+  var fld = document.getElementById("LayerStyle");
+  stylesShown = fld ? fld.value : "";
+  var sm = styleMap(), n = 0;
+  for (var i = 0; i < styleNames.length; i++) {
+    var st = sm.map[styleNames[i]];
+    var sel = document.getElementById("StyK" + i), w = document.getElementById("StyW" + i);
+    if (!sel || !w) continue;
+    sel.value = st ? st.k : "1";
+    w.value = st ? st.w : "";
+    var td = document.getElementById("StyN" + i);
+    if (td) td.className = st ? "set" : "";
+    if (st) n++;
+  }
+  styleInfo(n);
+}
+function buildStyles() {
+  var list = document.getElementById("LayerList"), box = document.getElementById("StyleBox");
+  if (!list || !box || list.value == "") return;
+  var lang = currentLang();
+  if (lang != stylesLang) {
+    stylesLang = lang;
+    var en = (lang == "2"), names = en ? STY_EN : STY_DE;
+    var items = list.value.split("|");
+    var html = '<table class="stytab"><tr><th>Layer</th><th>' + (en ? "Line type" : "Strichart") + '</th><th>' +
+               (en ? "Width" : "Stärke") + '</th></tr>';
+    styleNames = [];
+    for (var i = 0; i < items.length; i++) {
+      var name = items[i].substring(2);
+      styleNames.push(name);
+      html += '<tr><td id="StyN' + i + '">' + htmlEsc(name) + '</td><td><select id="StyK' + i + '" onchange="saveStyles()">';
+      for (var k = 0; k < names.length; k++) html += '<option value="' + (k + 1) + '">' + names[k] + '</option>';
+      html += '</select></td><td><input class="num" type="text" id="StyW' + i +
+              '" onkeyup="saveStyles()" onchange="saveStyles()"> mm</td></tr>';
+    }
+    box.innerHTML = html + '</table>';
+    applyStyles();
+  } else if (!stylesTouched) {
+    // VCarve setzt den Feldwert erst nach dem Laden -> uebernehmen, sobald er sich aendert
+    var fld = document.getElementById("LayerStyle");
+    if (fld && fld.value != stylesShown) applyStyles();
+  }
+}
+function saveStyles() {
+  stylesTouched = true;
+  var sm = styleMap(), n = 0;
+  for (var i = 0; i < styleNames.length; i++) {
+    var sel = document.getElementById("StyK" + i), w = document.getElementById("StyW" + i);
+    if (!sel || !w) continue;
+    var name = styleNames[i], k = sel.value || "1";
+    var wv = w.value.replace(/[^\d.,]/g, "");
+    var td = document.getElementById("StyN" + i);
+    if (k == "1" && wv == "") {
+      delete sm.map[name];
+      if (td) td.className = "";
+    } else {
+      if (!sm.map.hasOwnProperty(name)) sm.order.push(name);
+      sm.map[name] = { k: k, w: wv };
+      if (td) td.className = "set";
+      n++;
+    }
+  }
+  var out = [];
+  for (var j = 0; j < sm.order.length; j++) {
+    var st = sm.map[sm.order[j]];
+    if (st) out.push(sm.order[j] + "=" + st.k + ":" + st.w);
+  }
+  document.getElementById("LayerStyle").value = out.join("|");
+  styleInfo(n);
 }
 function syncLayerBox() {
   var r = document.getElementsByName("Source"), on = false;
@@ -684,7 +793,7 @@ function syncPdfAsk() {
   var v = (e.value || "").replace(/^\s+|\s+$/g, "");
   a.value = (v == "") ? "1" : "0";
 }
-function syncAll() { syncLang(); syncDimLayer(); buildLayers(); syncLayerBox(); syncSlider(); syncRowSlider(); syncAutoMenu(); syncFontWarn(); syncPaper(); syncPdfAsk(); applyZoom(false); }
+function syncAll() { syncLang(); syncDimLayer(); buildLayers(); buildStyles(); syncLayerBox(); syncSlider(); syncRowSlider(); syncAutoMenu(); syncFontWarn(); syncPaper(); syncPdfAsk(); applyZoom(false); }
 
 window.onload = function () {
   reportScreen();

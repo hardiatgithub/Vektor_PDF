@@ -5,6 +5,17 @@ Neueste Version steht oben.
 
 ## [Unveröffentlicht]
 
+### Neu (Branch LineTypes)
+- **Linienarten je Layer** (Bereich „Linien“, Knopf „Linienarten ►“): Für jeden Layer lassen sich **Strichart**
+  (durchgezogen, gestrichelt, strichpunktiert, gepunktet, Strich-Zweipunkt) und eine eigene **Linienstärke** wählen –
+  z. B. Umriss kräftig, verdeckte Kanten gestrichelt, Mittellinien dünn strichpunktiert. Stärke leer = Linienstärke
+  von oben. Die Einstellung wird je Layername gemerkt (auch für Layer anderer Zeichnungen) und gilt auch bei
+  „Nur ausgewählte“. Strich- und Lückenlängen wachsen mit der Linienstärke. Bemaßungen bleiben unverändert.
+- **Vorschau-Knopf** (unten neben OK): erzeugt das PDF mit den aktuellen Einstellungen als temporäre Datei
+  (`%TEMP%\Vektor_PDF_Vorschau.pdf`) und öffnet es im Standard-PDF-Programm – der Dialog bleibt offen, Einstellungen
+  lassen sich ändern und erneut ansehen. Gespeichert wird erst mit OK. Ist die alte Vorschau im PDF-Programm noch
+  gesperrt, bekommt die neue eine Nummer (`_2` … `_9`).
+
 ### Behoben
 - **Seiten-Diagnose ohne Grund:** Lag alles Exportierte auf nur einer Seite (z. B. nur Layer „Korpus Skizze“ gewählt),
   erschien trotzdem die Seiten-Diagnose. Sie kommt jetzt nur noch, wenn die Seiten wirklich nicht erkannt werden.

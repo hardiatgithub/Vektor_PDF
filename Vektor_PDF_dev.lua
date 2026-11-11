@@ -1206,8 +1206,11 @@ local function CollectContours(job, selected_only, dim_layer, layer_filter)
     local lcol = (not is_dim) and LayerColour(layer) or nil
     if not is_dim then
       if lcol then layer_color_ok = layer_color_ok + 1 else layer_color_fail = layer_color_fail + 1 end
+      -- eigene Tabelle je Layer: Farbe + Layername (fuer Linienart / Staerke je Layer)
+      lcol = { lcol and lcol[1] or 0, lcol and lcol[2] or 0, lcol and lcol[3] or 0,
+               lname = NormName((lname:gsub("|", "/"))) }
       local iok, lid = pcall(function() return tostring(layer.Id) end)
-      if iok and lid ~= nil and lcol then layer_colors[lid] = lcol end
+      if iok and lid ~= nil then layer_colors[lid] = lcol end
     end
     if use then
       local pos = layer:GetHeadPosition()
@@ -1937,6 +1940,17 @@ function OnLuaButton_BrowsePdf(dialog)
   return true
 end
 
+-- Knopf "Vorschau": das PDF mit den aktuellen Einstellungen als temporaere Datei erzeugen und im
+-- PDF-Programm oeffnen; der Dialog bleibt offen. export_fn wird in main() gesetzt.
+local export_fn = nil
+function OnLuaButton_PreviewPdf(dialog)
+  if export_fn then
+    local ok, err = pcall(export_fn, true)
+    if not ok then DisplayMessageBox("Vorschau / Preview:\n" .. tostring(err)) end
+  end
+  return true
+end
+
 function main(script_path)
   diag_path = script_path .. "\\vdim_diag.txt"
   diag_lines = {}
@@ -2025,6 +2039,7 @@ function main(script_path)
   end)
   dialog:AddTextField("LayerList", table.concat(layer_items, "|"))
   dialog:AddTextField("LayerSel", reg:GetString("LayerSel", ""))
+  dialog:AddTextField("LayerStyle", reg:GetString("LayerStyle", ""))   -- "Name=Art:Staerke|..." je Layer
   dialog:AddRadioGroup("SheetMode", reg:GetInt("SheetMode", 1))
   dialog:AddCheckBox("DrawBorder", reg:GetBool("DrawBorder", false))
   dialog:AddCheckBox("DimAuto", reg:GetBool("DimAuto", false))   -- Grundwert: nur Vectric-Bemassung (Auto aus)
@@ -2079,14 +2094,11 @@ function main(script_path)
 
   dialog:AddTextField("ScrW", "")
   dialog:AddTextField("ScrH", "")
-  local dialog_ok = dialog:ShowDialog()
-  SaveWindowState(reg, dialog)
-  -- Bildschirmgroesse merken (auch bei Abbrechen), damit das Fenster beim naechsten Mal passt
-  local sw = tonumber(dialog:GetTextField("ScrW") or "")
-  local sh = tonumber(dialog:GetTextField("ScrH") or "")
-  if sw and sw > 300 then reg:SetInt("ScreenW", math.floor(sw)) end
-  if sh and sh > 300 then reg:SetInt("ScreenH", math.floor(sh)) end
-  if not dialog_ok then return false end
+  -- Export als Funktion: laeuft nach OK (preview = false) und beim Knopf "Vorschau" (preview = true,
+  -- der Dialog ist dann noch offen)
+  local function Export(preview)
+  diag_lines = {}
+  row_diag_done = false
 
   lang = dialog:GetRadioIndex("Lang")
   reg:SetInt("Lang", lang)
@@ -2132,6 +2144,8 @@ function main(script_path)
   local source      = dialog:GetRadioIndex("Source")
   local selected_only = source == 1
   local layer_sel   = dialog:GetTextField("LayerSel") or ""
+  local layer_style = ""
+  pcall(function() layer_style = dialog:GetTextField("LayerStyle") or "" end)
   local sheet_mode  = dialog:GetRadioIndex("SheetMode")     -- 1 = aktuelle Seite, 2 = alle Seiten
   local draw_border = dialog:GetCheckBox("DrawBorder")
   local dim_overall = dialog:GetCheckBox("DimOverall")
@@ -2177,7 +2191,7 @@ function main(script_path)
   local pdf_ask = ""
   pcall(function() pdf_ask = dialog:GetTextField("PdfAsk") or "" end)
   if pdf_ask == "1" then pdf_path = "" end
-  reg:SetBool("PdfEmpty", pdf_path == "")                  -- leeres Feld merken (naechstes Mal wieder leer)
+  if not preview then reg:SetBool("PdfEmpty", pdf_path == "") end                  -- leeres Feld merken (naechstes Mal wieder leer)
 
   reg:SetDouble("LineWidth", line_mm)
   reg:SetDouble("DimLineWidth", dim_line_mm)
@@ -2233,6 +2247,22 @@ function main(script_path)
   reg:SetString("Title", title)
   reg:SetInt("Source", source)
   reg:SetString("LayerSel", layer_sel)
+  reg:SetString("LayerStyle", layer_style)
+  -- Linienart und Staerke je Layer: { [NormName] = { kind = 1..5, mm = Staerke oder nil } }
+  -- kind: 1 durchgezogen, 2 gestrichelt, 3 strichpunktiert, 4 gepunktet, 5 Strich-Zweipunkt
+  local layer_styles, used_styles = {}, {}
+  for e in (layer_style .. "|"):gmatch("([^|]*)|") do
+    local n, k, w = e:match("^(.*)=(%d):([%d%.,]*)$")
+    if n and n ~= "" then
+      local mm = tonumber((w:gsub(",", ".")))
+      if mm and (mm <= 0 or mm > 10) then mm = nil end
+      local kind = tonumber(k) or 1
+      if kind < 1 or kind > 5 then kind = 1 end
+      if kind > 1 or mm then
+        layer_styles[NormName(n)] = { kind = kind, mm = mm }
+      end
+    end
+  end
 
   -- gewaehlte Layer
   local layer_filter, layer_count = nil, 0
@@ -3054,7 +3084,23 @@ function main(script_path)
     -- 1) Zeichnung
     local s = { f(line_mm * MM) .. " w 1 J 1 j " .. ColorOps(vec_color) }
     local last_col = nil
+    local last_w, last_dash = f(line_mm * MM), "[] 0 d"
     for _, p in ipairs(paths) do
+      -- Linienart / Staerke des Layers (ohne Eintrag: durchgezogen, Linienstaerke von oben)
+      local st = p.color and p.color.lname and layer_styles[p.color.lname] or nil
+      if st then used_styles[p.color.lname] = true end
+      local lw = ((st and st.mm) or line_mm) * MM
+      local dash = "[] 0 d"
+      if st and st.kind > 1 then
+        -- Luecke waechst mit der Staerke (runde Linienenden ragen je eine halbe Staerke hinein)
+        local g = math.max(1.2 * MM, 2.5 * lw)
+        if st.kind == 2 then dash = "[" .. f(2.5 * g) .. " " .. f(g) .. "] 0 d"
+        elseif st.kind == 3 then dash = "[" .. f(5 * g) .. " " .. f(g) .. " 0 " .. f(g) .. "] 0 d"
+        elseif st.kind == 4 then dash = "[0 " .. f(math.max(0.8 * MM, 2.5 * lw)) .. "] 0 d"
+        else dash = "[" .. f(5 * g) .. " " .. f(g) .. " 0 " .. f(g) .. " 0 " .. f(g) .. "] 0 d" end
+      end
+      if f(lw) ~= last_w then last_w = f(lw); s[#s + 1] = last_w .. " w" end
+      if dash ~= last_dash then last_dash = dash; s[#s + 1] = dash end
       if vec_color == 6 then                 -- Farbe des Layers uebernehmen
         local rgb = p.color or { 0, 0, 0 }
         if rgb[1] > 0.9 and rgb[2] > 0.9 and rgb[3] > 0.9 then rgb = { 0.6, 0.6, 0.6 } end  -- weiss -> grau
@@ -3078,6 +3124,7 @@ function main(script_path)
       end
       s[#s + 1] = "S"
     end
+    if last_dash ~= "[] 0 d" then s[#s + 1] = "[] 0 d" end
     if border then
       s[#s + 1] = "q 0.3 w 0.6 G " .. f(tx(border[1])) .. " " .. f(ty(border[2])) .. " " ..
         f((border[3] - border[1]) * scale) .. " " .. f((border[4] - border[2]) * scale) .. " re S Q"
@@ -3532,13 +3579,24 @@ function main(script_path)
 
   -- Speichern
   local fd = { PathName = pdf_path }
-  if pdf_path == "" then                    -- kein Pfad eingetragen: wie bisher fragen
+  local pv_dir = nil
+  if preview then                           -- Vorschau: temporaere Datei, nichts fragen
+    pv_dir = os.getenv("TEMP") or os.getenv("TMP") or script_path
+    fd.PathName = pv_dir .. "\\Vektor_PDF_Vorschau.pdf"
+  elseif pdf_path == "" then                -- kein Pfad eingetragen: wie bisher fragen
     fd = FileDialog()
     if not fd:FileSave("pdf", T("Zeichnung.pdf", "Drawing.pdf"), T("PDF Dateien", "PDF files") .. " (*.pdf)|*.pdf|") then
       return false
     end
   end
   local ok, err = WritePdf(fd.PathName, pages)
+  if preview and not ok then                -- alte Vorschau noch im PDF-Programm offen (gesperrt): anderer Name
+    for n = 2, 9 do
+      fd.PathName = pv_dir .. "\\Vektor_PDF_Vorschau_" .. n .. ".pdf"
+      ok, err = WritePdf(fd.PathName, pages)
+      if ok then break end
+    end
+  end
   -- Diagnose der Vectric-Bemassungen schreiben (Datei wird von Git ignoriert)
   if diag_path and #diag_lines > 0 then
     pcall(function()
@@ -3557,6 +3615,14 @@ function main(script_path)
         fh:close()
       end
     end)
+  end
+  if ok and preview then                    -- im Standard-PDF-Programm oeffnen, keine Abschlussmeldung
+    local opened = pcall(function() os.execute('start "" "' .. fd.PathName .. '"') end)
+    if not opened then
+      DisplayMessageBox(T("Vorschau gespeichert, konnte aber nicht geoeffnet werden:\n",
+                          "Preview saved but could not be opened:\n") .. fd.PathName)
+    end
+    return true
   end
   if ok then
     local d = SplitPath(fd.PathName)
@@ -3585,6 +3651,11 @@ function main(script_path)
   end
   if layer_filter then
     msg = msg .. "\n" .. T("Layer: ", "Layers: ") .. layer_sel:gsub("|", ", ")
+  end
+  local style_count = 0
+  for _ in pairs(used_styles) do style_count = style_count + 1 end
+  if style_count > 0 then
+    msg = msg .. "\n" .. T("Eigene Linienart / Staerke: ", "Own line type / width: ") .. style_count .. " Layer"
   end
   if sheet_diag then msg = msg .. sheet_diag end
   local n_group = 0
@@ -3633,4 +3704,17 @@ function main(script_path)
   end
   DisplayMessageBox(msg)
   return true
+  end   -- Export
+
+  export_fn = Export
+  local dialog_ok = dialog:ShowDialog()
+  SaveWindowState(reg, dialog)
+  -- Bildschirmgroesse merken (auch bei Abbrechen), damit das Fenster beim naechsten Mal passt
+  local sw = tonumber(dialog:GetTextField("ScrW") or "")
+  local sh = tonumber(dialog:GetTextField("ScrH") or "")
+  if sw and sw > 300 then reg:SetInt("ScreenW", math.floor(sw)) end
+  if sh and sh > 300 then reg:SetInt("ScreenH", math.floor(sh)) end
+  export_fn = nil
+  if not dialog_ok then return false end
+  return Export(false)
 end
