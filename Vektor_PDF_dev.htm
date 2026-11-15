@@ -184,7 +184,7 @@
 
 <fieldset class="s-dims">
   <legend><span class="t" data-en="Dimensions">Bemaßung</span></legend>
-  <div class="vhint"><span class="t" data-en="Vectric dimensions are largely taken over and redrawn – auto dimensions instead or in addition.">Vectric-Bemaßungen werden weitgehend übernommen und neu gezeichnet – Autobemaßung alternativ oder ergänzend.</span></div>
+  <div class="vhint"><a href="#" id="DimStd" class="abtn" style="float:right; margin:0 0 0 0.6em; background:#fff;" onclick="dimStandard(); return false;" title="Bemaßung auf die Grundeinstellung: nur Vectric-Bemaßung, Auto- und Reihenbemaßung aus" data-title-en="Reset dimensions to the default: Vectric dimensions only, auto and row dimensions off"><span class="t" data-en="Default">Standard</span></a><span class="t" data-en="Vectric dimensions are largely taken over and redrawn – auto dimensions instead or in addition.">Vectric-Bemaßungen werden weitgehend übernommen und neu gezeichnet – Autobemaßung alternativ oder ergänzend.</span></div>
   <div class="dimbtns">
     <span class="hidecb"><input type="checkbox" id="DimAuto"><input type="checkbox" id="VDimOff"></span>
     <table class="dsl"><tr>
@@ -668,6 +668,24 @@ function dslSet(pos) {
   var h = document.getElementById("DimOn");
   if (h) h.checked = true;                           // Regler bedient -> Bemassung wieder an
   syncSlider(); syncAutoMenu();
+}
+// Knopf "Standard": Bemassung auf die Grundeinstellung einer Neuinstallation -- nur Vectric-Bemassung,
+// Auto- und Reihenbemassung aus, Auswahl im Menue "Auto-Einstellungen" und Reihen-Optionen wie am Anfang.
+// Farbe, Linienstaerke, Pfeil- und Schriftgroesse bleiben unveraendert.
+function dimStandard() {
+  var on = { DimOn: 1, DimOverall: 1, DimCircle: 1, DimRadiusOnce: 1 };
+  var ids = ["DimOn", "DimAuto", "VDimOff", "RowOn", "DimOverall", "DimOverallIn", "DimEach", "DimEachIn", "DimEachOut",
+             "DimCircle", "DimPoly", "DimRadius", "DimRadiusOnce", "DimRadiusIn", "DimAngle", "RowHolesOnce", "RowPerPart"];
+  for (var i = 0; i < ids.length; i++) {
+    var c = document.getElementById(ids[i]);
+    if (c) c.checked = (on[ids[i]] == 1);
+  }
+  var groups = ["GroupMode", "RowType", "RowRef"];
+  for (var g = 0; g < groups.length; g++) {
+    var r = document.getElementsByName(groups[g]);
+    for (var k = 0; k < r.length; k++) r[k].checked = (r[k].value == "1");
+  }
+  syncAll();
 }
 function syncSlider() {
   var pos = dslGet(), k = document.getElementById("DimKnob"), f = document.getElementById("DimFill");

@@ -3622,6 +3622,14 @@ function main(script_path)
       DisplayMessageBox(T("Vorschau gespeichert, konnte aber nicht geoeffnet werden:\n",
                           "Preview saved but could not be opened:\n") .. fd.PathName)
     end
+    local pv_other = skipped - skipped_dims   -- auch in der Vorschau melden, wenn etwas fehlt
+    if pv_other > 0 then
+      DisplayMessageBox(T("Vorschau: ", "Preview: ") .. pv_other ..
+        T(" Objekt(e) ohne Vektorform (z. B. Vectric-Text) fehlen im PDF.\n" ..
+          "Text vorher in VCarve markieren und \"In Kurven umwandeln\" waehlen.",
+          " object(s) without vector shape (e.g. Vectric text) are missing in the PDF.\n" ..
+          "Select the text in VCarve first and choose \"Convert to curves\"."))
+    end
     return true
   end
   if ok then
@@ -3691,8 +3699,10 @@ function main(script_path)
   end
   local other = skipped - skipped_dims
   if other > 0 then
-    msg = msg .. "\n\n" .. other .. T(" Objekt(e) ohne Vektorform (z. B. Vectric-Text) wurden uebersprungen.",
-          " object(s) without vector shape (e.g. Vectric text) were skipped.")
+    msg = msg .. "\n\n" .. other .. T(" Objekt(e) ohne Vektorform (z. B. Vectric-Text) wurden uebersprungen." ..
+          "\nText vorher in VCarve markieren und \"In Kurven umwandeln\" waehlen.",
+          " object(s) without vector shape (e.g. Vectric text) were skipped." ..
+          "\nSelect the text in VCarve first and choose \"Convert to curves\".")
   end
   if bezier_fallback > 0 then
     msg = msg .. T("\n\nHinweis: ", "\n\nNote: ") .. bezier_fallback ..

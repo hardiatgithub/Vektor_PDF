@@ -6,6 +6,9 @@ Neueste Version steht oben.
 ## [Unveröffentlicht]
 
 ### Neu (Branch LineTypes)
+- **Knopf „Standard“** (Bereich „Bemaßung“, rechts oben): stellt die Bemaßung auf die Grundeinstellung einer
+  Neuinstallation zurück – nur Vectric-Bemaßung, Auto- und Reihenbemaßung aus, Auswahl im Menü „Auto-Einstellungen“
+  und Reihen-Optionen wie am Anfang. Farbe, Linienstärke, Pfeil- und Schriftgröße bleiben unverändert.
 - **Linienarten je Layer** (Bereich „Linien“, Knopf „Linienarten ►“): Für jeden Layer lassen sich **Strichart**
   (durchgezogen, gestrichelt, strichpunktiert, gepunktet, Strich-Zweipunkt) und eine eigene **Linienstärke** wählen –
   z. B. Umriss kräftig, verdeckte Kanten gestrichelt, Mittellinien dünn strichpunktiert. Stärke leer = Linienstärke
@@ -15,6 +18,8 @@ Neueste Version steht oben.
   (`%TEMP%\Vektor_PDF_Vorschau.pdf`) und öffnet es im Standard-PDF-Programm – der Dialog bleibt offen, Einstellungen
   lassen sich ändern und erneut ansehen. Gespeichert wird erst mit OK. Ist die alte Vorschau im PDF-Programm noch
   gesperrt, bekommt die neue eine Nummer (`_2` … `_9`).
+  Fehlen Objekte ohne Vektorform (z. B. Vectric-Text), meldet das auch die Vorschau – mit dem Hinweis
+  „In Kurven umwandeln“ (steht jetzt auch in der Abschlussmeldung).
 
 ### Behoben
 - **Seiten-Diagnose ohne Grund:** Lag alles Exportierte auf nur einer Seite (z. B. nur Layer „Korpus Skizze“ gewählt),
