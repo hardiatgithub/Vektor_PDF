@@ -5,6 +5,13 @@ Neueste Version steht oben.
 
 ## [Unveröffentlicht]
 
+### Neu (Branch display_minimization)
+- **Bereiche auf- und zuklappen:** Ein Klick auf die farbige Überschrift eines Bereichs (Linien, Welche Vektoren,
+  Bemaßung, Beschriftung, Seite, Datei) klappt ihn zu oder auf. Zugeklappt zeigt der Bereich eine Zeile mit den
+  wichtigsten Einstellungen, z. B. „Auf A4 einpassen · A4 · Querformat · Rand 10 mm“; ein Klick auf diese Zeile
+  öffnet ihn wieder. Welche Bereiche zu sind, wird gemerkt (auch bei Abbrechen).
+  Oben rechts unter der Kopfzeile klappen **„Alle zu“** und **„Alle auf“** alle Bereiche auf einmal zu bzw. auf.
+
 ### Neu (Branch LineTypes)
 - **Knopf „Standard“** (Bereich „Bemaßung“, rechts oben): stellt die Bemaßung auf die Grundeinstellung einer
   Neuinstallation zurück – nur Vectric-Bemaßung, Auto- und Reihenbemaßung aus, Auswahl im Menü „Auto-Einstellungen“

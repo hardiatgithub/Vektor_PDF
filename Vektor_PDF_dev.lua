@@ -1857,6 +1857,8 @@ local function SaveWindowState(reg, dialog)
     reg:SetDouble("WindowHeight", dialog.WindowHeight)
   end
   reg:SetString("ZoomLevel", dialog:GetDropDownListValue("ZoomLevel") or "Auto")
+  -- zugeklappte Bereiche des Dialogs (auch bei Abbrechen merken)
+  pcall(function() reg:SetString("Collapsed", dialog:GetTextField("Collapsed") or "") end)
 end
 
 -- ------------------------------------------------------------------
@@ -2039,7 +2041,8 @@ function main(script_path)
   end)
   dialog:AddTextField("LayerList", table.concat(layer_items, "|"))
   dialog:AddTextField("LayerSel", reg:GetString("LayerSel", ""))
-  dialog:AddTextField("LayerStyle", reg:GetString("LayerStyle", ""))   -- "Name=Art:Staerke|..." je Layer
+  dialog:AddTextField("LayerStyle", reg:GetString("LayerStyle", ""))
+  dialog:AddTextField("Collapsed", reg:GetString("Collapsed", ""))     -- zugeklappte Bereiche, z. B. "labels,page"   -- "Name=Art:Staerke|..." je Layer
   dialog:AddRadioGroup("SheetMode", reg:GetInt("SheetMode", 1))
   dialog:AddCheckBox("DrawBorder", reg:GetBool("DrawBorder", false))
   dialog:AddCheckBox("DimAuto", reg:GetBool("DimAuto", false))   -- Grundwert: nur Vectric-Bemassung (Auto aus)
